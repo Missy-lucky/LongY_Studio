@@ -30,7 +30,8 @@ export function NodeCanvas() {
   const workflowBusy = useNodeStore(s => s.workflowBusy)
   const workflowMessage = useNodeStore(s => s.workflowMessage)
   const restoreLastProject = useNodeStore(s => s.restoreLastProject)
-  const organizeLayout = useNodeStore(s => s.organizeLayout)
+  const requestFitView = useNodeStore(s => s.requestFitView)
+  const moveNode = useNodeStore(s => s.moveNode)
   const fitViewCounter = useNodeStore(s => s.fitViewCounter)
   const rf = useReactFlow()
 
@@ -72,13 +73,63 @@ export function NodeCanvas() {
     setSelected(node.id)
   }, [setSelected])
 
+  // Right-button drag is an explicit free-form placement mode. It starts on
+  // right pointer-down so movement is tracked before the browser context event.
+  const startRightDrag = useCallback((event: React.MouseEvent, node: Node) => {
+    setSelected(node.id)
+    const startPosition = { ...node.position }
+    const startPointer = rf.screenToFlowPosition({
+      x: event.clientX,
+      y: event.clientY,
+    })
+
+    const move = (pointerEvent: PointerEvent) => {
+      const current = rf.screenToFlowPosition({
+        x: pointerEvent.clientX,
+        y: pointerEvent.clientY,
+      })
+      moveNode(node.id, {
+        x: startPosition.x + current.x - startPointer.x,
+        y: startPosition.y + current.y - startPointer.y,
+      })
+    }
+    const stop = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', stop)
+      window.removeEventListener('pointercancel', stop)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', stop)
+    window.addEventListener('pointercancel', stop)
+  }, [moveNode, rf, setSelected])
+
+  const onNodeContextMenu = useCallback((event: React.MouseEvent) => {
+    event.preventDefault()
+  }, [])
+
+  const onCanvasPointerDown = useCallback((event: React.PointerEvent) => {
+    if (event.button !== 2) return
+    const element = (event.target as HTMLElement).closest('[data-id]')
+    const nodeId = element?.getAttribute('data-id')
+    const node = rfNodes.find(item => item.id === nodeId)
+    if (!node) return
+    event.preventDefault()
+    startRightDrag(event, node)
+  }, [rfNodes, startRightDrag])
+
   return (
-    <div className="relative h-full w-full">
+    <div
+      className="relative h-full w-full"
+      onContextMenu={event => event.preventDefault()}
+      onPointerDownCapture={onCanvasPointerDown}>
       <ReactFlow
         nodes={rfNodes}
         edges={rfEdges}
         nodeTypes={nodeTypes}
         onNodeClick={onNodeClick}
+        onNodeContextMenu={onNodeContextMenu}
+        nodesDraggable
+        elementsSelectable
         onNodeDoubleClick={(_, node) => rf.fitView({ nodes: [{ id: node.id }], duration: 300, maxZoom: 1.2 })}
         fitView
         fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
@@ -127,9 +178,12 @@ export function NodeCanvas() {
         <button onClick={() => void startGeneration()} disabled={workflowBusy} className="btn btn-primary !min-h-[36px] !rounded-xl" title="只提交当前勾选范围内的待生成任务；真实 Provider 会先确认">
           {workflowBusy ? <Loader2 size={14} className="anim-spin"/> : <Play size={14} strokeWidth={1.5}/>}开始流程
         </button>
-        <button onClick={organizeLayout} className="btn btn-secondary !min-h-[36px] !rounded-xl" title="自动整理节点布局">
-          <Layers size={14} strokeWidth={1.5}/>整理布局
+        <button onClick={requestFitView} className="btn btn-secondary !min-h-[36px] !rounded-xl" title="只缩放视图适应内容，不改变节点位置">
+          <Layers size={14} strokeWidth={1.5}/>适应视图
         </button>
+        <div className="rounded-lg border px-2.5 py-2 text-[10px] leading-4" style={{ background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--text-3)' }}>
+          左键或右键拖拽节点可自由调整位置；生成方案不会重排素材节点。
+        </div>
         {workflowMessage && (
           <div className="rounded-lg border px-2.5 py-2 text-[10px] leading-4 shadow" style={{ background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--text-2)' }}>
             {workflowMessage}

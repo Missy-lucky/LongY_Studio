@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronRight, FolderOpen, Keyboard, LayoutGrid, Maximize2, Plus, Save, Settings2, Sparkles } from 'lucide-react'
+import { ChevronRight, FolderOpen, Keyboard, Maximize2, Plus, Save, Settings2, Sparkles } from 'lucide-react'
 import clsx from 'clsx'
 import { useNodeStore } from '../../stores/node-store'
 import { useWorkbench } from '../../stores/workbench-store'
@@ -24,7 +24,6 @@ export function AppMenuBar() {
   const setTypePickerOpen = useNodeStore(state => state.setTypePickerOpen)
   const setModelPickerOpen = useNodeStore(state => state.setModelPickerOpen)
   const exportLocked = useNodeStore(state => state.exportLocked)
-  const organizeLayout = useNodeStore(state => state.organizeLayout)
   const requestFitView = useNodeStore(state => state.requestFitView)
   const providerId = useNodeStore(state => state.providerId)
   const setProviderId = useNodeStore(state => state.setProviderId)
@@ -60,7 +59,6 @@ export function AppMenuBar() {
     {
       id: 'layout', label: '布局',
       items: [
-        { label: '自动整理布局', icon: LayoutGrid, action: () => { organizeLayout(); requestFitView() } },
         { label: '适配全部节点', icon: Maximize2, action: requestFitView },
       ],
     },

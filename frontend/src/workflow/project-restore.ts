@@ -10,7 +10,7 @@ import type {
 import { DEFAULT_INPUT_NODES, MODEL_STYLES, findCategory } from '../data/preset-categories'
 import { PROCESS_ORDER, PROCESS_TITLES } from '../data/process-templates'
 import type { RemoteAsset, RemoteTask } from '../services/api'
-import { organizeNodes, outputPosition } from './node-layout'
+import { inputPosition, modelPosition, organizeNodes, outputPosition } from './node-layout'
 import { outputStatus } from './task-sync'
 
 export interface RestoredProjectGraph {
@@ -43,7 +43,7 @@ export function buildRestoredProjectGraph({
     return {
       id: `asset-${asset.id}`,
       type: 'input' as const,
-      position: { x: 60, y: 40 + index * 280 },
+      position: inputPosition(index),
       collapsed: false,
       data: {
         categoryId: category.id,
@@ -70,7 +70,7 @@ export function buildRestoredProjectGraph({
     return {
       id: createId('input'),
       type: 'input' as const,
-      position: { x: 60, y: 40 + index * 250 },
+      position: inputPosition(index),
       collapsed: false,
       data: {
         categoryId: category.id,
@@ -88,7 +88,7 @@ export function buildRestoredProjectGraph({
   const modelNode: FlowModelNode = {
     id: 'model-locked',
     type: 'model' as const,
-    position: { x: 60, y: 40 + allInputs.length * 280 + 20 },
+    position: modelPosition(allInputs.length),
     collapsed: false,
     data: {
       styleId: selectedStyle.id,

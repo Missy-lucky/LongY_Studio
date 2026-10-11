@@ -7,18 +7,32 @@ import type {
 import { PROCESS_ORDER } from '../data/process-templates'
 
 const OUTPUT_COLUMNS = 3
-const INPUT_COLUMNS = 2
-const INPUT_ROW_GAP = 340
 const outputGap = (type: ProcessType) => type === 'model' ? 330 : 270
 
-export const inputPosition = (index: number) => ({
-  x: 60 + (index % INPUT_COLUMNS) * 220,
-  y: 40 + Math.floor(index / INPUT_COLUMNS) * INPUT_ROW_GAP,
-})
+// Initial source placement is deliberately staggered rather than forced into a
+// row/column grid. Users can drag each source node freely at any time.
+const INPUT_SEED_POSITIONS = [
+  { x: 60, y: 48 },
+  { x: 248, y: 138 },
+  { x: 104, y: 342 },
+  { x: 238, y: 468 },
+  { x: 68, y: 634 },
+]
+
+export const inputPosition = (index: number) => {
+  if (index < INPUT_SEED_POSITIONS.length) return INPUT_SEED_POSITIONS[index]
+  const ring = Math.floor((index - INPUT_SEED_POSITIONS.length) / 5) + 1
+  const slot = (index - INPUT_SEED_POSITIONS.length) % 5
+  const angle = (slot / 5) * Math.PI * 2 + ring * 0.55
+  return {
+    x: Math.round(190 + Math.cos(angle) * (215 + ring * 58)),
+    y: Math.round(360 + Math.sin(angle) * (245 + ring * 72)),
+  }
+}
 
 export const modelPosition = (inputCount: number) => ({
-  x: 60,
-  y: 40 + Math.ceil(inputCount / INPUT_COLUMNS) * INPUT_ROW_GAP + 20,
+  x: 238,
+  y: 905 + inputCount * 8,
 })
 
 export const outputPosition = (type: ProcessType, index: number, baseY: number) => ({
@@ -26,12 +40,8 @@ export const outputPosition = (type: ProcessType, index: number, baseY: number) 
   y: baseY + Math.floor(index / OUTPUT_COLUMNS) * outputGap(type),
 })
 
-/** Organize a three-stage graph without shrinking image containers to avoid overlap. */
-export function organizeNodes(
-  nodes: AnyFlowNode[],
-  options: { preserveSourcePositions?: boolean } = {},
-): AnyFlowNode[] {
-  const inputCount = nodes.filter(node => node.type === 'input').length
+/** Stage process/output nodes while preserving user-owned source-node positions. */
+export function organizeNodes(nodes: AnyFlowNode[]): AnyFlowNode[] {
   const outputCounts = new Map<ProcessType, number>()
   nodes.forEach(node => {
     if (node.type !== 'output') return
@@ -52,16 +62,7 @@ export function organizeNodes(
 
   const counts = new Map<ProcessType, number>()
   return nodes.map(node => {
-    if (options.preserveSourcePositions && (node.type === 'input' || node.type === 'model')) {
-      return node
-    }
-    if (node.type === 'input') {
-      const index = nodes.filter(item => item.type === 'input').indexOf(node)
-      return { ...node, position: inputPosition(index) }
-    }
-    if (node.type === 'model') {
-      return { ...node, position: modelPosition(inputCount) }
-    }
+    if (node.type === 'input' || node.type === 'model') return node
     if (node.type === 'processing') {
       const process = node as FlowProcessingNode
       return { ...node, position: { x: 430, y: processY.get(process.data.processType) ?? 40 } }

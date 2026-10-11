@@ -6,7 +6,7 @@ import type {
 import { DEFAULT_INPUT_NODES, MODEL_STYLES, findCategory } from '../data/preset-categories'
 import { PROCESS_ORDER, PROCESS_TITLES } from '../data/process-templates'
 import { api, type ConsistencyQcReport, type ExportPreview, type ProviderInfo, type RemoteProject, type RemoteTask, type ShotPlanPreview, type ShotSelectionInput } from '../services/api'
-import { inputPosition, modelPosition, organizeNodes, outputPosition } from '../workflow/node-layout'
+import { inputPosition, modelPosition, outputPosition } from '../workflow/node-layout'
 import { buildRestoredProjectGraph } from '../workflow/project-restore'
 import { activeBackendStatus, syncNodesWithTasks } from '../workflow/task-sync'
 
@@ -84,8 +84,8 @@ export interface NodeStoreState {
   setProjectSettingsOpen: (open: boolean) => void
   setProjectLibraryOpen: (open: boolean) => void
   openProject: (projectId: string) => Promise<void>
-  organizeLayout: () => void
   requestFitView: () => void
+  moveNode: (nodeId: string, position: { x: number; y: number }) => void
   saveProjectMeta: (payload: Partial<RemoteProject>) => Promise<void>
   refreshProviders: () => Promise<void>
   setGenerationTypes: (types: ProcessType[]) => void
@@ -383,12 +383,11 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
     get().requestFitView()
   },
 
-  organizeLayout: () => set(state => ({
-    nodes: organizeNodes(state.nodes),
-    workflowMessage: '已按「素材 → 处理 → 输出」自动整理布局',
-  })),
-
   requestFitView: () => set(state => ({ fitViewCounter: state.fitViewCounter + 1 })),
+
+  moveNode: (nodeId, position) => set(state => ({
+    nodes: state.nodes.map(node => node.id === nodeId ? { ...node, position } : node),
+  })),
 
   saveProjectMeta: async payload => {
     set({ workflowBusy: true, workflowMessage: '正在保存项目资料...' })
@@ -710,10 +709,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
         return { id: nid('edge'), source: proc!.id, target: output.id, edgeType: 'output' as const }
       })
       set(state => ({
-        nodes: organizeNodes(
-          [...state.nodes.filter(node => node.type !== 'output'), ...outputNodes],
-          { preserveSourcePositions: true },
-        ).map(node => {
+        nodes: [...state.nodes.filter(node => node.type !== 'output'), ...outputNodes].map(node => {
           if (node.type !== 'processing') return node
           const proc = node as FlowProcessingNode
           const count = tasks.filter(task => task.type === proc.data.processType).length
