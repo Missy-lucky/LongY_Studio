@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from ..config import settings
 from ..database import get_db
+from ..services.shot_coverage import project_shot_coverage
 
 router = APIRouter()
 TYPE_FOLDERS = {"flat": "01_平面图", "detail": "02_细节图", "partial": "03_局部图", "model": "04_模特图"}
@@ -45,7 +46,14 @@ def preview(project_id: str) -> dict:
                 "conflict": seen[base] > 1,
             })
         root = settings.data_dir / "exports" / f"{proj['sku']}-{safe_name(proj['name'])}"
-        return {"files": files, "exportDir": str(root)}
+        coverage = project_shot_coverage(project_id)
+        return {
+            "files": files,
+            "exportDir": str(root),
+            "coverageComplete": coverage["complete"],
+            "coverage": coverage["coverage"],
+            "missingShotNames": coverage["missingShotNames"],
+        }
     finally:
         db.close()
 
@@ -62,6 +70,12 @@ def export(project_id: str, body: ExportIn) -> dict:
         proj = db.execute("SELECT sku,name FROM projects WHERE id=?", (project_id,)).fetchone()
         if not proj:
             raise HTTPException(404, "项目不存在")
+        coverage = project_shot_coverage(project_id)
+        if not coverage["complete"]:
+            raise HTTPException(
+                409,
+                f"缺少必拍镜头：{'、'.join(coverage['missingShotNames'])}",
+            )
         rows = []
         for tid in body.task_ids:
             row = db.execute(

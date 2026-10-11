@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-os.environ.setdefault("LONGY_DATA_DIR", str(ROOT / "temp" / "tests" / "library-data"))
+os.environ.setdefault("LONGY_DATA_DIR", str(ROOT / "temp" / "tests" / "backend-data"))
 
 from backend.app.services.library_loader import load_shot_templates, validate_shot_template  # noqa: E402
 
@@ -44,9 +44,11 @@ from backend.app.main import app
 
 
 def test_item_attributes_are_validated_and_persisted():
+    import uuid
+
     with TestClient(app) as client:
         project = client.post("/api/projects", json={
-            "sku": "ATTR-001", "name": "属性录入测试", "platform": "taobao",
+            "sku": f"ATTR-{uuid.uuid4().hex[:6]}", "name": "属性录入测试", "platform": "taobao",
             "style": "简约", "budget": 10,
         }).json()
         item = client.post(f"/api/projects/{project['id']}/items", json={
@@ -68,9 +70,11 @@ def test_item_attributes_are_validated_and_persisted():
         assert template.json()["template"]["attributes"][0]["key"] == "hasHood"
 
 def test_hoodie_shot_template_expands_conditional_tasks_and_presets():
+    import uuid
+
     with TestClient(app) as client:
         project = client.post("/api/projects", json={
-            "sku": "SHOT-001", "name": "套图规划测试", "platform": "taobao",
+            "sku": f"SHOT-{uuid.uuid4().hex[:6]}", "name": "套图规划测试", "platform": "taobao",
             "style": "简约", "budget": 10,
         }).json()
         client.post(f"/api/projects/{project['id']}/items", json={
@@ -115,3 +119,45 @@ def test_prompt_builder_combines_legacy_category_and_shot_rules():
     assert "Category display rules: 保留袋鼠口袋" in prompt
     assert "Shot rules: 双袖对称展开" in prompt
     assert "Color / material record: 黑色 / 毛圈布" in prompt
+
+def test_export_coverage_blocks_missing_required_shot():
+    import uuid
+
+    from backend.app.database import get_db
+
+    with TestClient(app) as client:
+        suffix = uuid.uuid4().hex[:6]
+        project = client.post("/api/projects", json={
+            "sku": f"COV-{suffix}", "name": "导出覆盖测试", "platform": "taobao",
+            "style": "简约", "budget": 10,
+        }).json()
+        pid = project["id"]
+        client.post(f"/api/projects/{pid}/items", json={
+            "name": "卫衣", "categoryId": "hoodie", "attributes": {"hasHood": True, "hasZip": False},
+        })
+        client.post(f"/api/projects/{pid}/tasks/plan", json={
+            "presetId": "fast-check", "provider": "mock", "replaceExisting": True,
+            "modelIds": ["chinese-grand"],
+        })
+        preview = client.get(f"/api/projects/{pid}/exports/preview").json()
+        assert not preview["coverageComplete"]
+        assert "帽型特写" in preview["missingShotNames"]
+
+        db = get_db()
+        try:
+            db.execute(
+                "UPDATE tasks SET status='accepted' WHERE project_id=?", (pid,)
+            )
+            hood = db.execute(
+                "SELECT id FROM tasks WHERE project_id=? AND shot_id='detail-hood'", (pid,)
+            ).fetchone()
+            db.execute("DELETE FROM tasks WHERE id=?", (hood["id"],))
+            db.commit()
+        finally:
+            db.close()
+
+        preview = client.get(f"/api/projects/{pid}/exports/preview").json()
+        assert preview["missingShotNames"] == ["帽型特写"]
+        blocked = client.post(f"/api/projects/{pid}/exports", json={"taskIds": []})
+        assert blocked.status_code == 409
+        assert "帽型特写" in blocked.json()["detail"]

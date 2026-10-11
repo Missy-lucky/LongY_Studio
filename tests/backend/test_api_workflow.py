@@ -7,9 +7,9 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT / "temp" / "tests" / "backend-data"
-os.environ["LONGY_DATA_DIR"] = str(DATA_DIR)
-os.environ["LONGY_MAX_CONCURRENCY"] = "2"
-os.environ["LONGY_MOCK_FAILURE_RATE"] = "0"
+os.environ.setdefault("LONGY_DATA_DIR", str(DATA_DIR))
+os.environ.setdefault("LONGY_MAX_CONCURRENCY", "2")
+os.environ.setdefault("LONGY_MOCK_FAILURE_RATE", "0")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -62,12 +62,15 @@ def test_full_backend_mock_workflow(client: TestClient):
     assert tasks
     assert all(t["status"] == "review" for t in tasks)
 
-    locked = tasks[0]
-    assert client.post(f"/api/projects/{pid}/tasks/{locked['id']}/review", json={"action": "lock"}).json()["ok"]
+    for task in tasks:
+        assert client.post(
+            f"/api/projects/{pid}/tasks/{task['id']}/review", json={"action": "lock"}
+        ).json()["ok"]
     preview = client.get(f"/api/projects/{pid}/exports/preview").json()
     assert preview["files"]
+    assert preview["coverageComplete"]
 
-    exported = client.post(f"/api/projects/{pid}/exports", json={"taskIds": [locked["id"]]}).json()
+    exported = client.post(f"/api/projects/{pid}/exports", json={"taskIds": [tasks[0]["id"]]}).json()
     assert exported["exported"] == 1
     assert Path(exported["mapping"][0]["written"]).is_file()
 
