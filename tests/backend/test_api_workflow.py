@@ -18,9 +18,6 @@ from backend.app.main import app  # noqa: E402
 
 @pytest.fixture(scope="module")
 def client():
-    if DATA_DIR.exists():
-        shutil.rmtree(DATA_DIR)
-    (DATA_DIR / "sqlite").mkdir(parents=True, exist_ok=True)
     with TestClient(app) as c:
         yield c
 

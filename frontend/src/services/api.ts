@@ -139,6 +139,38 @@ export interface ExportCoverageItem {
   ready: boolean
 }
 
+export interface ConsistencyQcCheck {
+  score: number | null
+  passed: boolean
+  threshold?: number
+  reasons?: string[]
+  [key: string]: unknown
+}
+
+export interface ConsistencyQcReport {
+  schema: string
+  taskType: string
+  output: string
+  enforced?: boolean
+  score: number
+  passed: boolean
+  reasons: string[]
+  pixel?: Record<string, unknown> & { passed?: boolean }
+  garment?: ConsistencyQcCheck
+  model?: ConsistencyQcCheck
+  detail?: Record<string, unknown>
+  pipeline?: string[]
+  tier?: 'draft' | 'hd'
+}
+
+export interface VersionQcResponse {
+  taskId: string
+  versionId: string
+  score: number | null
+  passed: boolean
+  report: ConsistencyQcReport | null
+}
+
 export interface ExportPreviewFile {
   taskId: string | null
   assetId?: string | null
@@ -229,13 +261,7 @@ export const api = {
   startHdRepair: (projectId: string, taskId: string) =>
     request<{ version: number; versionId: string; tier: 'hd' }>(`/projects/${projectId}/tasks/${taskId}/hd-repair`, { method: 'POST' }),
   getVersionQc: (projectId: string, taskId: string, versionId: string) =>
-    request<{
-      taskId: string
-      versionId: string
-      score: number | null
-      passed: boolean
-      report: Record<string, unknown> | null
-    }>(`/projects/${projectId}/tasks/${taskId}/versions/${versionId}/qc`),
+    request<VersionQcResponse>(`/projects/${projectId}/tasks/${taskId}/versions/${versionId}/qc`),
   exportPreview: (projectId: string) =>
     request<ExportPreview>(`/projects/${projectId}/exports/preview`),
   exportTasks: (projectId: string, taskIds: string[]) =>

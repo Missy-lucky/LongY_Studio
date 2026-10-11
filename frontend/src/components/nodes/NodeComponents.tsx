@@ -260,6 +260,7 @@ export function OutputNodeComponent({ data, id }: { data: FlowOutputNode['data']
   const markUnsatisfied = useNodeStore(s => s.markUnsatisfied)
   const regenerate = useNodeStore(s => s.regenerate)
   const startHdRepair = useNodeStore(s => s.startHdRepair)
+  const openVersionQc = useNodeStore(s => s.openVersionQc)
   const lockOutput = useNodeStore(s => s.lockOutput)
   const removeOutput = useNodeStore(s => s.removeOutput)
   const openImageViewer = useNodeStore(s => s.openImageViewer)
@@ -326,13 +327,19 @@ export function OutputNodeComponent({ data, id }: { data: FlowOutputNode['data']
             {data.tier === 'hd' ? 'HD Repair' : 'Draft'}
           </span>
           {data.qcScore != null && (
-            <span className="rounded px-1 py-0.5 font-mono text-[8px]"
+            <button
+              onClick={event => {
+                event.stopPropagation()
+                void openVersionQc(id)
+              }}
+              className="flex !min-h-[20px] items-center rounded px-1 py-0.5 font-mono text-[8px] transition-colors hover:bg-black/70"
               style={{
                 background: 'rgba(0,0,0,0.48)',
                 color: data.qcPassed ? '#22C55E' : '#F59E0B',
-              }}>
+              }}
+              title="查看一致性 QC 报告">
               QC {Math.round(data.qcScore * 100)}
-            </span>
+            </button>
           )}
         </div>
 

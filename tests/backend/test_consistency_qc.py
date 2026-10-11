@@ -20,9 +20,6 @@ from backend.app.services.consistency_qc import run_consistency_qc  # noqa: E402
 
 @pytest.fixture(scope="module")
 def client():
-    if DATA_DIR.exists():
-        shutil.rmtree(DATA_DIR)
-    (DATA_DIR / "sqlite").mkdir(parents=True, exist_ok=True)
     with TestClient(app) as test_client:
         yield test_client
 

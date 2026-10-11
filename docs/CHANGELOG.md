@@ -32,7 +32,9 @@
 - `task_versions` 新增 `qc_score`、`qc_passed`、`qc_report_path`。
 - 新增 `GET /api/projects/{projectId}/tasks/{taskId}/versions/{versionId}/qc`。
 - 输出节点显示 QC 分数与通过状态。
+- 点击输出节点 QC 徽标可查看完整报告：档位、管线、服装一致性、模特身份、输出细节与像素 QC。
 - Mock Provider 的 QC 只记录不阻断；真实 Provider 执行一致性阈值并给出失败原因。
+- 导出档案会同时包含“用原图满足”的素材文件，并写入 `export_asset_files` 档案表。
 
 ### 依赖与模型
 - 新增 `opencv-python-headless`、`mediapipe`。

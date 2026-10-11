@@ -5,7 +5,7 @@ import type {
 } from '../types/node-system'
 import { DEFAULT_INPUT_NODES, MODEL_STYLES, findCategory } from '../data/preset-categories'
 import { PROCESS_ORDER, PROCESS_TITLES } from '../data/process-templates'
-import { api, type ExportPreview, type ProviderInfo, type RemoteProject, type RemoteTask, type ShotPlanPreview, type ShotSelectionInput } from '../services/api'
+import { api, type ConsistencyQcReport, type ExportPreview, type ProviderInfo, type RemoteProject, type RemoteTask, type ShotPlanPreview, type ShotSelectionInput } from '../services/api'
 import { organizeNodes, outputPosition } from '../workflow/node-layout'
 import { buildRestoredProjectGraph } from '../workflow/project-restore'
 import { activeBackendStatus, syncNodesWithTasks } from '../workflow/task-sync'
@@ -28,6 +28,17 @@ export interface RealGenerationConfirm {
   count: number
   providerName: string
   estimatedCost: number
+}
+
+export interface VersionQcState {
+  taskId: string
+  taskCode: string
+  taskName: string
+  versionId: string
+  version: number
+  score: number | null
+  passed: boolean
+  report: ConsistencyQcReport | null
 }
 
 export interface ExportResultState {
@@ -62,6 +73,7 @@ export interface NodeStoreState {
   exportPreview: ExportPreview | null
   shotPlan: ShotPlanPreview | null
   exportResult: ExportResultState | null
+  versionQc: VersionQcState | null
 
   initCanvas: () => void
   resetCanvas: () => void
@@ -104,6 +116,8 @@ export interface NodeStoreState {
   confirmRealGeneration: () => Promise<void>
   cancelRealGeneration: () => void
   closeExportResult: () => void
+  openVersionQc: (nodeId: string) => Promise<void>
+  closeVersionQc: () => void
   removeOutput: (nodeId: string) => void
   openImageViewer: (viewer: NodeImageViewer) => void
   closeImageViewer: () => void
@@ -217,6 +231,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
   exportPreview: null,
   shotPlan: null,
   exportResult: null,
+  versionQc: null,
 
   initCanvas: () => {
     if (get().canvasInitialized || get().nodes.length) return
@@ -1057,6 +1072,35 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
   closeExportPreview: () => set({ exportPreview: null }),
 
   closeExportResult: () => set({ exportResult: null }),
+
+  openVersionQc: async nodeId => {
+    const output = get().nodes.find(node => node.id === nodeId) as FlowOutputNode | undefined
+    const projectId = get().backendProjectId
+    if (!output?.data.versionId || !projectId) return
+    set({ workflowBusy: true, workflowMessage: '正在读取一致性 QC 报告...' })
+    try {
+      const result = await api.getVersionQc(projectId, output.data.taskId, output.data.versionId)
+      set({
+        versionQc: {
+          taskId: output.data.taskId,
+          taskCode: output.data.taskCode,
+          taskName: output.data.taskName,
+          versionId: output.data.versionId,
+          version: output.data.version,
+          score: result.score,
+          passed: result.passed,
+          report: result.report,
+        },
+        workflowMessage: '一致性 QC 报告已打开',
+      })
+    } catch (error) {
+      set({ workflowMessage: error instanceof Error ? error.message : 'QC 报告读取失败' })
+    } finally {
+      set({ workflowBusy: false })
+    }
+  },
+
+  closeVersionQc: () => set({ versionQc: null }),
 
   removeOutput: nodeId => set(state => ({
     nodes: state.nodes.filter(node => node.id !== nodeId),

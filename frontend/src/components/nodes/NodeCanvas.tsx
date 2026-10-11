@@ -6,6 +6,7 @@ import { useNodeStore } from '../../stores/node-store'
 import { InputNodeComponent, ModelNodeComponent, ProcessingNodeComponent, OutputNodeComponent } from './NodeComponents'
 import { TypePicker, ModelPicker } from './TypePicker'
 import { NodeImageViewer } from './ImageViewer'
+import { VersionQcDialog } from './VersionQcDialog'
 import { ExportPreviewCoverageDialog, ExportResultDialog, ProjectSettingsDialog, ProviderConfirmDialog } from './WorkflowDialogs'
 import { EDGE_COLORS } from '../../types/node-system'
 
@@ -122,6 +123,7 @@ export function NodeCanvas() {
       <TypePicker/>
       <ModelPicker/>
       <NodeImageViewer/>
+      <VersionQcDialog/>
       <ProviderConfirmDialog/>
       <ExportPreviewCoverageDialog/>
       <ExportResultDialog/>
