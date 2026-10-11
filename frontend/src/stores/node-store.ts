@@ -6,7 +6,7 @@ import type {
 import { DEFAULT_INPUT_NODES, MODEL_STYLES, findCategory } from '../data/preset-categories'
 import { PROCESS_ORDER, PROCESS_TITLES } from '../data/process-templates'
 import { api, type ConsistencyQcReport, type ExportPreview, type ProviderInfo, type RemoteProject, type RemoteTask, type ShotPlanPreview, type ShotSelectionInput } from '../services/api'
-import { organizeNodes, outputPosition } from '../workflow/node-layout'
+import { inputPosition, modelPosition, organizeNodes, outputPosition } from '../workflow/node-layout'
 import { buildRestoredProjectGraph } from '../workflow/project-restore'
 import { activeBackendStatus, syncNodesWithTasks } from '../workflow/task-sync'
 
@@ -247,7 +247,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
       const cat = findCategory(catId)!
       return {
         id: nid('input'), type: 'input' as const,
-        position: { x: 60, y: 40 + i * 250 },
+        position: inputPosition(i),
         collapsed: false,
         data: {
           categoryId: cat.id, categoryName: cat.name, categoryGroup: cat.group,
@@ -259,7 +259,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
 
     const modelNode: FlowModelNode = {
       id: nid('model'), type: 'model' as const,
-      position: { x: 60, y: 40 + 4 * 250 + 20 },
+      position: modelPosition(DEFAULT_INPUT_NODES.length),
       collapsed: false,
       data: {
         styleId: selectedStyle.id, styleName: selectedStyle.name,
@@ -436,10 +436,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
     if (!cat) return
     const newNode: FlowInputNode = {
       id: nid('input'), type: 'input',
-      position: {
-        x: 60,
-        y: Math.max(0, ...get().nodes.filter(n => n.type === 'input').map(n => n.position.y)) + 280,
-      },
+      position: inputPosition(get().nodes.filter(node => node.type === 'input').length),
       collapsed: false,
       data: {
         categoryId: cat.id, categoryName: cat.name, categoryGroup: cat.group,
@@ -713,10 +710,10 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
         return { id: nid('edge'), source: proc!.id, target: output.id, edgeType: 'output' as const }
       })
       set(state => ({
-        nodes: organizeNodes([
-          ...state.nodes.filter(node => node.type !== 'output'),
-          ...outputNodes,
-        ]).map(node => {
+        nodes: organizeNodes(
+          [...state.nodes.filter(node => node.type !== 'output'), ...outputNodes],
+          { preserveSourcePositions: true },
+        ).map(node => {
           if (node.type !== 'processing') return node
           const proc = node as FlowProcessingNode
           const count = tasks.filter(task => task.type === proc.data.processType).length

@@ -1,6 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Handle, Position } from '@xyflow/react'
-import { Check, Image as ImageIcon, Lock, Maximize2, RefreshCw, Sparkles, Trash2, Upload, X } from 'lucide-react'
+import { Check, Image as ImageIcon, Lock, Maximize2, RefreshCw, SlidersHorizontal, Sparkles, Trash2, Upload, X } from 'lucide-react'
 import clsx from 'clsx'
 import type { FlowInputNode, FlowModelNode, FlowProcessingNode, FlowOutputNode } from '../../types/node-system'
 import { STATUS_COLORS } from '../../types/node-system'
@@ -21,6 +22,7 @@ export function InputNodeComponent({ data, id }: { data: FlowInputNode['data']; 
   const loadInputAttributes = useNodeStore(s => s.loadInputAttributes)
   const setInputAttribute = useNodeStore(s => s.setInputAttribute)
   const openImageViewer = useNodeStore(s => s.openImageViewer)
+  const [attributesOpen, setAttributesOpen] = useState(false)
 
   useEffect(
     () => { void loadInputAttributes(id) },
@@ -48,8 +50,7 @@ export function InputNodeComponent({ data, id }: { data: FlowInputNode['data']; 
   const isEmpty = !data.image
 
   return (
-    <div className={clsx('group card relative w-[160px] overflow-hidden !rounded-xl',
-      isEmpty && 'border-dashed')}
+    <div className={clsx('group card relative w-[160px] overflow-hidden !rounded-xl', isEmpty && 'border-dashed')}
       style={{
         background: 'var(--surface)',
         borderColor: isEmpty ? 'var(--text-3)' : 'var(--border)',
@@ -65,6 +66,19 @@ export function InputNodeComponent({ data, id }: { data: FlowInputNode['data']; 
           {data.categoryName}
         </button>
         <div className="flex gap-0.5">
+          {data.attributeOptions.length > 0 && (
+            <button
+              onClick={event => {
+                event.stopPropagation()
+                setAttributesOpen(true)
+              }}
+              className="flex h-9 w-9 items-center justify-center rounded-md opacity-60 transition-all hover:bg-[var(--surface-hover)] hover:opacity-100 focus:opacity-100 group-hover:opacity-100"
+              style={{ color: 'var(--primary)' }}
+              title="设置商品属性"
+              aria-label={`设置${data.categoryName}商品属性`}>
+              <SlidersHorizontal size={12} strokeWidth={1.6}/>
+            </button>
+          )}
           <button
             onClick={() => removeNode(id)}
             className="flex h-9 w-9 items-center justify-center rounded-md opacity-60 transition-all hover:bg-[var(--surface-hover)] hover:opacity-100 focus:opacity-100 group-hover:opacity-100"
@@ -135,31 +149,46 @@ export function InputNodeComponent({ data, id }: { data: FlowInputNode['data']; 
         )}
       </div>
 
-      {data.attributeOptions.length > 0 && (
-        <div className="mx-2.5 mb-2.5 rounded-lg border p-2" style={{ borderColor: 'var(--border)' }}>
-          <div className="mb-1 text-[9px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-3)' }}>
-            商品属性
+      {attributesOpen && createPortal(
+        <div
+          className="fixed inset-0 z-[260] flex items-center justify-center bg-black/60 p-6"
+          onMouseDown={() => setAttributesOpen(false)}
+        >
+          <div
+            className="w-[320px] rounded-2xl border p-4"
+            style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-lg)' }}
+            onMouseDown={event => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-semibold">{data.categoryName}属性</div>
+                <div className="mt-0.5 text-[10px] text-text-muted">上传前勾选实际存在的结构特征</div>
+              </div>
+              <button onClick={() => setAttributesOpen(false)} className="btn btn-secondary !px-2 !py-1.5">
+                <X size={13}/>
+              </button>
+            </div>
+            <div className="mt-3 max-h-[320px] space-y-1 overflow-y-auto pr-1">
+              {data.attributeOptions.map(attribute => (
+                <label
+                  key={attribute.key}
+                  className={`flex items-center gap-2 rounded-lg px-2 py-2 text-xs transition-colors ${data.image?.remote ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-[var(--surface-hover)]'}`}
+                  style={{ color: 'var(--text-2)' }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={Boolean(data.attributes[attribute.key])}
+                    onChange={event => setInputAttribute(id, attribute.key, event.target.checked)}
+                    disabled={Boolean(data.image?.remote)}
+                    className="h-3.5 w-3.5 accent-[var(--primary)]"
+                  />
+                  <span>{attribute.label}</span>
+                </label>
+              ))}
+            </div>
           </div>
-          <div className="max-h-[92px] space-y-1 overflow-y-auto pr-1">
-            {data.attributeOptions.map(attribute => (
-              <label
-                key={attribute.key}
-                className={`flex items-center gap-1.5 text-[10px] ${data.image?.remote ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                style={{ color: 'var(--text-2)' }}
-                onMouseDown={event => event.stopPropagation()}
-              >
-                <input
-                  type="checkbox"
-                  checked={Boolean(data.attributes[attribute.key])}
-                  onChange={event => setInputAttribute(id, attribute.key, event.target.checked)}
-                  disabled={Boolean(data.image?.remote)}
-                  className="h-3 w-3 accent-[var(--primary)]"
-                />
-                <span className="truncate" title={attribute.label}>{attribute.label}</span>
-              </label>
-            ))}
-          </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
@@ -324,7 +353,7 @@ export function OutputNodeComponent({ data, id }: { data: FlowOutputNode['data']
         <div className="absolute left-1.5 top-8 flex flex-col items-start gap-1">
           <span className="rounded px-1 py-0.5 font-mono text-[8px] uppercase"
             style={{ background: 'rgba(0,0,0,0.48)', color: data.tier === 'hd' ? '#38BDF8' : '#D1D5DB' }}>
-            {data.tier === 'hd' ? 'HD Repair' : 'Draft'}
+            {data.tier === 'hd' ? '高清修复' : '草稿'}
           </span>
           {data.qcScore != null && (
             <button
@@ -337,8 +366,8 @@ export function OutputNodeComponent({ data, id }: { data: FlowOutputNode['data']
                 background: 'rgba(0,0,0,0.48)',
                 color: data.qcPassed ? '#22C55E' : '#F59E0B',
               }}
-              title="查看一致性 QC 报告">
-              QC {Math.round(data.qcScore * 100)}
+              title="查看一致性质检报告">
+              质检 {Math.round(data.qcScore * 100)}
             </button>
           )}
         </div>

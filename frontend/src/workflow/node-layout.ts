@@ -7,7 +7,19 @@ import type {
 import { PROCESS_ORDER } from '../data/process-templates'
 
 const OUTPUT_COLUMNS = 3
+const INPUT_COLUMNS = 2
+const INPUT_ROW_GAP = 340
 const outputGap = (type: ProcessType) => type === 'model' ? 330 : 270
+
+export const inputPosition = (index: number) => ({
+  x: 60 + (index % INPUT_COLUMNS) * 220,
+  y: 40 + Math.floor(index / INPUT_COLUMNS) * INPUT_ROW_GAP,
+})
+
+export const modelPosition = (inputCount: number) => ({
+  x: 60,
+  y: 40 + Math.ceil(inputCount / INPUT_COLUMNS) * INPUT_ROW_GAP + 20,
+})
 
 export const outputPosition = (type: ProcessType, index: number, baseY: number) => ({
   x: 760 + (index % OUTPUT_COLUMNS) * 200,
@@ -15,7 +27,10 @@ export const outputPosition = (type: ProcessType, index: number, baseY: number) 
 })
 
 /** Organize a three-stage graph without shrinking image containers to avoid overlap. */
-export function organizeNodes(nodes: AnyFlowNode[]): AnyFlowNode[] {
+export function organizeNodes(
+  nodes: AnyFlowNode[],
+  options: { preserveSourcePositions?: boolean } = {},
+): AnyFlowNode[] {
   const inputCount = nodes.filter(node => node.type === 'input').length
   const outputCounts = new Map<ProcessType, number>()
   nodes.forEach(node => {
@@ -37,12 +52,15 @@ export function organizeNodes(nodes: AnyFlowNode[]): AnyFlowNode[] {
 
   const counts = new Map<ProcessType, number>()
   return nodes.map(node => {
+    if (options.preserveSourcePositions && (node.type === 'input' || node.type === 'model')) {
+      return node
+    }
     if (node.type === 'input') {
       const index = nodes.filter(item => item.type === 'input').indexOf(node)
-      return { ...node, position: { x: 60, y: 40 + index * 280 } }
+      return { ...node, position: inputPosition(index) }
     }
     if (node.type === 'model') {
-      return { ...node, position: { x: 60, y: 40 + inputCount * 280 + 20 } }
+      return { ...node, position: modelPosition(inputCount) }
     }
     if (node.type === 'processing') {
       const process = node as FlowProcessingNode
