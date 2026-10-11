@@ -1,0 +1,232 @@
+import { useState } from 'react'
+import { Ban, Check, Image as ImageIcon, ListChecks, Plus, Sparkles, X } from 'lucide-react'
+import { useNodeStore } from '../../stores/node-store'
+import type { ShotPlanPreview, ShotPlanShot } from '../../services/api'
+
+const TYPE_LABEL: Record<ShotPlanShot['type'], string> = {
+  flat: '平面',
+  partial: '局部',
+  detail: '细节',
+  model: '模特',
+}
+
+const PRIORITY_STYLE: Record<ShotPlanShot['priority'], { color: string; label: string }> = {
+  P0: { color: '#EF4444', label: '必拍' },
+  P1: { color: '#F59E0B', label: '建议' },
+  P2: { color: '#64748B', label: '可选' },
+}
+
+interface CustomShotForm {
+  name: string
+  type: ShotPlanShot['type']
+  priority: ShotPlanShot['priority']
+  promptHints: string
+}
+
+const EMPTY_CUSTOM: CustomShotForm = {
+  name: '', type: 'detail', priority: 'P1', promptHints: '',
+}
+
+export function ShotPlanReviewDialog() {
+  const plan = useNodeStore(state => state.shotPlan)
+  const close = useNodeStore(state => state.closeShotPlan)
+  const confirm = useNodeStore(state => state.confirmShotPlan)
+  const updateSelection = useNodeStore(state => state.updateShotPlanSelection)
+  const addCustomShot = useNodeStore(state => state.addCustomShot)
+  const busy = useNodeStore(state => state.workflowBusy)
+  const [customItemId, setCustomItemId] = useState<string | null>(null)
+  const [custom, setCustom] = useState<CustomShotForm>(EMPTY_CUSTOM)
+
+  if (!plan) return null
+
+  const setStatus = (itemId: string, item: ShotPlanPreview['items'][number], shot: ShotPlanShot, status: ShotPlanShot['status']) => {
+    if (status === 'selected') {
+      updateSelection(itemId, shot.shotId, {
+        status, source: 'ai', assetId: null, reason: '',
+      })
+    } else if (status === 'fulfilled') {
+      updateSelection(itemId, shot.shotId, {
+        status,
+        source: 'asset',
+        assetId: item.assets[0]?.id ?? null,
+        reason: '',
+      })
+    } else {
+      updateSelection(itemId, shot.shotId, {
+        status, source: 'manual', assetId: null, reason: '',
+      })
+    }
+  }
+
+  const submitCustom = (itemId: string) => {
+    if (!custom.name.trim()) return
+    addCustomShot(itemId, {
+      name: custom.name.trim(),
+      type: custom.type,
+      priority: custom.priority,
+      promptHints: custom.promptHints.trim(),
+    })
+    setCustom(EMPTY_CUSTOM)
+    setCustomItemId(null)
+  }
+
+  return (
+    <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/65 p-6">
+      <div className="flex max-h-[84vh] w-[920px] flex-col overflow-hidden rounded-2xl border"
+        style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-lg)' }}>
+        <div className="flex items-center gap-3 border-b px-5 py-4" style={{ borderColor: 'var(--divider)' }}>
+          <ListChecks size={16} className="text-accent" />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold">镜头方案确认</div>
+            <div className="mt-0.5 text-[11px] text-text-secondary">
+              默认只提交 P0；P1/P2 可按需追加，原图已满足或业务不需要的镜头可标记，避免无效生成。
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-sm font-semibold">¥{plan.estimatedCost}</div>
+            <div className="text-[10px] text-text-muted">{plan.selectedCount} 张待生成</div>
+          </div>
+          <button onClick={close} className="btn btn-secondary !px-2 !py-1.5"><X size={13}/></button>
+        </div>
+
+        <div className="flex-1 space-y-4 overflow-y-auto p-4">
+          {plan.items.map(item => (
+            <section key={item.itemId} className="rounded-xl border" style={{ borderColor: 'var(--border)' }}>
+              <div className="flex items-center gap-3 border-b px-4 py-3" style={{ borderColor: 'var(--divider)' }}>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-xs font-semibold">{item.itemName}</div>
+                  <div className="mt-0.5 text-[10px] text-text-muted">
+                    {item.categoryName} · {item.shots.length} 个镜头 · {item.assets.length} 张原图
+                  </div>
+                </div>
+                <span className="rounded-full border px-2 py-1 text-[10px]"
+                  style={{ borderColor: 'var(--border)', color: 'var(--text-2)' }}>
+                  选择 {item.selectedCount} · ¥{item.estimatedCost}
+                </span>
+                <button
+                  onClick={() => {
+                    setCustomItemId(customItemId === item.itemId ? null : item.itemId)
+                    setCustom(EMPTY_CUSTOM)
+                  }}
+                  className="btn btn-secondary !min-h-[30px] !px-2 !py-1 !text-[10px]">
+                  <Plus size={11}/>自定义
+                </button>
+              </div>
+
+              {customItemId === item.itemId && (
+                <div className="border-b p-3" style={{ borderColor: 'var(--divider)', background: 'var(--bg-2)' }}>
+                  <div className="grid grid-cols-[1.4fr_0.8fr_0.8fr_2fr_auto] items-center gap-2">
+                    <input value={custom.name} onChange={event => setCustom({ ...custom, name: event.target.value })}
+                      placeholder="镜头名称，如反光条特写" className="input !min-h-[32px] !text-xs" />
+                    <select value={custom.type} onChange={event => setCustom({ ...custom, type: event.target.value as CustomShotForm['type'] })}
+                      className="input !min-h-[32px] !text-xs">
+                      {Object.entries(TYPE_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
+                    <select value={custom.priority} onChange={event => setCustom({ ...custom, priority: event.target.value as CustomShotForm['priority'] })}
+                      className="input !min-h-[32px] !text-xs">
+                      <option value="P0">P0 必拍</option>
+                      <option value="P1">P1 建议</option>
+                      <option value="P2">P2 可选</option>
+                    </select>
+                    <input value={custom.promptHints} onChange={event => setCustom({ ...custom, promptHints: event.target.value })}
+                      placeholder="镜头提示词" className="input !min-h-[32px] !text-xs" />
+                    <button onClick={() => submitCustom(item.itemId)} className="btn btn-primary !min-h-[32px] !px-3 !text-xs">添加</button>
+                  </div>
+                </div>
+              )}
+
+              <div className="divide-y" style={{ borderColor: 'var(--divider)' }}>
+                {item.shots.map(shot => (
+                  <div key={shot.shotId} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold"
+                          style={{ background: `${PRIORITY_STYLE[shot.priority].color}22`, color: PRIORITY_STYLE[shot.priority].color }}>
+                          {shot.priority} {PRIORITY_STYLE[shot.priority].label}
+                        </span>
+                        <span className="truncate text-xs font-medium">{shot.shotName}</span>
+                        <span className="shrink-0 text-[9px] text-text-muted">{TYPE_LABEL[shot.type]}</span>
+                        {shot.isCustom && <span className="shrink-0 rounded bg-accent/15 px-1 py-0.5 text-[9px] text-accent">自定义</span>}
+                      </div>
+                      {shot.status === 'waived' ? (
+                        <input
+                          value={shot.reason}
+                          onChange={event => updateSelection(item.itemId, shot.shotId, { reason: event.target.value })}
+                          placeholder="豁免原因（导出报告会记录）"
+                          className="input mt-1.5 !min-h-[28px] !text-[10px]"
+                        />
+                      ) : shot.status === 'fulfilled' && item.assets.length > 0 ? (
+                        <select
+                          value={shot.assetId ?? item.assets[0].id}
+                          onChange={event => updateSelection(item.itemId, shot.shotId, {
+                            source: 'asset', assetId: event.target.value,
+                          })}
+                          className="input mt-1.5 !min-h-[28px] !text-[10px]">
+                          {item.assets.map(asset => (
+                            <option key={asset.id} value={asset.id}>
+                              {asset.viewSlot || '原图'} · {asset.filePath.split('/').pop()}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="mt-0.5 truncate text-[10px] text-text-muted">
+                          {shot.promptHints || '无附加镜头提示'}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setStatus(item.itemId, item, shot, 'selected')}
+                        className={clsButton(shot.status === 'selected')}
+                        title="生成这个镜头">
+                        <Sparkles size={11}/>生成
+                      </button>
+                      <button
+                        onClick={() => setStatus(item.itemId, item, shot, 'fulfilled')}
+                        disabled={item.assets.length === 0}
+                        className={clsButton(shot.status === 'fulfilled')}
+                        title={item.assets.length ? '用已上传原图满足' : '该单品暂无原图'}>
+                        <ImageIcon size={11}/>原图
+                      </button>
+                      <button
+                        onClick={() => setStatus(item.itemId, item, shot, 'waived')}
+                        className={clsButton(shot.status === 'waived')}
+                        title="本次豁免，不生成">
+                        <Ban size={11}/>豁免
+                      </button>
+                      <span className="ml-1 w-14 text-right text-[10px] text-text-muted">
+                        {shot.status === 'selected' ? `¥${shot.estimatedCost}` : '¥0'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-t px-5 py-3"
+          style={{ borderColor: 'var(--divider)' }}>
+          <div className="flex items-center gap-2 text-[11px] text-text-secondary">
+            <Check size={13} className="text-success" />
+            仅提交“生成”状态镜头；原图/豁免会进入覆盖校验，不会进入生图队列。
+          </div>
+          <div className="flex gap-2">
+            <button onClick={close} className="btn btn-secondary">取消</button>
+            <button
+              onClick={() => void confirm()}
+              disabled={busy}
+              className="btn btn-primary">
+              确认 {plan.selectedCount} 个镜头 · ¥{plan.estimatedCost}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function clsButton(active: boolean) {
+  return `btn !min-h-[28px] !px-2 !py-1 !text-[10px] ${active ? 'btn-primary' : 'btn-secondary'}`
+}

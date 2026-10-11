@@ -5,7 +5,7 @@ import type {
 } from '../types/node-system'
 import { DEFAULT_INPUT_NODES, MODEL_STYLES, findCategory } from '../data/preset-categories'
 import { PROCESS_ORDER, PROCESS_TITLES } from '../data/process-templates'
-import { api, type ExportPreview, type ProviderInfo, type RemoteProject, type RemoteTask } from '../services/api'
+import { api, type ExportPreview, type ProviderInfo, type RemoteProject, type RemoteTask, type ShotPlanPreview, type ShotSelectionInput } from '../services/api'
 import { organizeNodes, outputPosition } from '../workflow/node-layout'
 import { buildRestoredProjectGraph } from '../workflow/project-restore'
 import { activeBackendStatus, syncNodesWithTasks } from '../workflow/task-sync'
@@ -60,6 +60,7 @@ export interface NodeStoreState {
   restoreAttempted: boolean
   realGenerationConfirm: RealGenerationConfirm | null
   exportPreview: ExportPreview | null
+  shotPlan: ShotPlanPreview | null
   exportResult: ExportResultState | null
 
   initCanvas: () => void
@@ -83,6 +84,14 @@ export interface NodeStoreState {
   setChangeTypeTargetNodeId: (nodeId: string | null) => void
   setModelStyle: (styleId: string) => void
   generatePlan: () => Promise<void>
+  confirmShotPlan: () => Promise<void>
+  closeShotPlan: () => void
+  updateShotPlanSelection: (
+    itemId: string,
+    shotId: string,
+    patch: Partial<Pick<ShotPlanPreview['items'][number]['shots'][number], 'status' | 'source' | 'assetId' | 'reason'>>,
+  ) => void
+  addCustomShot: (itemId: string, shot: { name: string; type: RemoteTask['type']; priority: ShotPlanPreview['items'][number]['shots'][number]['priority']; promptHints: string }) => void
   startGeneration: () => Promise<void>
   markSatisfied: (nodeId: string) => Promise<void>
   markUnsatisfied: (nodeId: string, reason?: string, customPrompt?: string) => Promise<void>
@@ -104,6 +113,21 @@ export interface NodeStoreState {
 }
 
 const modelReferenceUrl = (modelId?: string) => modelId ? `/api/library/models/${modelId}/reference?variant=preview` : ''
+
+function recalculateShotPlanItems(items: ShotPlanPreview['items']): ShotPlanPreview['items'] {
+  return items.map(item => {
+    const shots = item.shots.map(shot => ({
+      ...shot,
+      estimatedCost: shot.status === 'selected' ? shot.estimatedCost : 0,
+    }))
+    return {
+      ...item,
+      shots,
+      selectedCount: shots.filter(shot => shot.status === 'selected').length,
+      estimatedCost: shots.reduce((sum, shot) => sum + shot.estimatedCost, 0),
+    }
+  })
+}
 
 let projectPromise: Promise<string> | null = null
 function ensureProject(): Promise<string> {
@@ -191,6 +215,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
   restoreAttempted: false,
   realGenerationConfirm: null,
   exportPreview: null,
+  shotPlan: null,
   exportResult: null,
 
   initCanvas: () => {
@@ -572,7 +597,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
       set({ workflowMessage: '请先上传并成功导入至少一张模板素材' })
       return
     }
-    set({ workflowBusy: true, workflowMessage: '正在生成后端任务方案...' })
+    set({ workflowBusy: true, workflowMessage: '正在读取套图镜头方案...' })
     try {
       const projectId = await ensureProject()
       const selectedModel = get().nodes
@@ -580,7 +605,52 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
       const modelId = selectedModel
         ? MODEL_STYLES.find(style => style.id === selectedModel.data.styleId)?.modelId
         : undefined
-      await api.planTasks(projectId, modelId ? [modelId] : [], get().providerId)
+      const plan = await api.previewShotPlan(projectId, modelId ? [modelId] : [], get().providerId)
+      set({
+        shotPlan: plan,
+        workflowMessage: `镜头方案待确认：默认选择 ${plan.selectedCount} 个 P0 镜头，预估 ¥${plan.estimatedCost}`,
+      })
+    } catch (error) {
+      set({ workflowMessage: error instanceof Error ? error.message : '镜头方案读取失败' })
+    } finally {
+      set({ workflowBusy: false })
+    }
+  },
+
+  confirmShotPlan: async () => {
+    const plan = get().shotPlan
+    const projectId = get().backendProjectId || globalThis.localStorage?.getItem('longy-backend-project-id')
+    if (!plan || !projectId) return
+    const selectedIds = plan.items.flatMap(item =>
+      item.shots.filter(shot => shot.status === 'selected').map(shot => shot.shotId)
+    )
+    set({ workflowBusy: true, workflowMessage: '正在保存镜头选择...' })
+    try {
+      const selections: ShotSelectionInput[] = plan.items.flatMap(item =>
+        item.shots
+          .filter((shot): shot is ShotPlanPreview['items'][number]['shots'][number] & { status: Exclude<ShotPlanPreview['items'][number]['shots'][number]['status'], 'proposed'> } => shot.status !== 'proposed')
+          .map(shot => ({
+            itemId: item.itemId,
+            shotId: shot.shotId,
+            shotName: shot.shotName,
+            type: shot.type,
+            priority: shot.priority,
+            required: shot.required,
+            isCustom: shot.isCustom,
+            status: shot.status,
+            source: shot.source,
+            assetId: shot.assetId,
+            reason: shot.reason,
+            promptHints: shot.promptHints,
+          })),
+      )
+      await api.saveShotSelections(projectId, selections)
+      const selectedModel = get().nodes
+        .find(node => node.type === 'model') as FlowModelNode | undefined
+      const modelId = selectedModel
+        ? MODEL_STYLES.find(style => style.id === selectedModel.data.styleId)?.modelId
+        : undefined
+      await api.planTasks(projectId, modelId ? [modelId] : [], get().providerId, selectedIds)
       const { tasks } = await api.listTasks(projectId)
       const outputsByType = new Map<ProcessType, number>()
       const outputNodes: FlowOutputNode[] = tasks.map(task => {
@@ -627,14 +697,84 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
           ...state.edges.filter(edge => edge.edgeType !== 'output' && !outputIds.has(edge.target)),
           ...procEdges,
         ],
-        workflowMessage: `任务方案已生成：${tasks.length} 个 ${get().providerId === 'mock' ? 'Mock' : 'OpenRouter'} 任务`,
+        shotPlan: null,
+        workflowMessage: `任务方案已确认：${tasks.length} 个 ${get().providerId === 'mock' ? 'Mock' : 'OpenRouter'} 任务`,
       }))
     } catch (error) {
-      set({ workflowMessage: error instanceof Error ? error.message : '任务规划失败' })
+      set({ workflowMessage: error instanceof Error ? error.message : '镜头方案确认失败' })
     } finally {
       set({ workflowBusy: false })
     }
   },
+
+  closeShotPlan: () => set({ shotPlan: null }),
+
+  updateShotPlanSelection: (itemId, shotId, patch) => set(state => {
+    if (!state.shotPlan) return {}
+    const items = state.shotPlan.items.map(item => {
+      if (item.itemId !== itemId) return item
+      const selectedCostByType = new Map(item.shots
+        .filter(shot => shot.status === 'selected' && shot.estimatedCost > 0)
+        .map(shot => [shot.type, shot.estimatedCost]))
+      const fallbackCost = item.shots.find(shot => shot.status === 'selected')?.estimatedCost ?? 0
+      const shots = item.shots.map(shot => {
+        if (shot.shotId !== shotId) return shot
+        const nextStatus = patch.status ?? shot.status
+        return {
+          ...shot,
+          ...patch,
+          estimatedCost: nextStatus === 'selected'
+            ? selectedCostByType.get(shot.type) ?? fallbackCost
+            : 0,
+        }
+      })
+      return { ...item, shots }
+    })
+    const nextItems = recalculateShotPlanItems(items)
+    return {
+      shotPlan: {
+        ...state.shotPlan,
+        items: nextItems,
+        selectedCount: nextItems.reduce((sum, item) => sum + item.selectedCount, 0),
+        estimatedCost: nextItems.reduce((sum, item) => sum + item.estimatedCost, 0),
+      },
+    }
+  }),
+
+  addCustomShot: (itemId, shot) => set(state => {
+    if (!state.shotPlan) return {}
+    const items = state.shotPlan.items.map(item => {
+      if (item.itemId !== itemId) return item
+      const sameTypeCost = item.shots.find(candidate =>
+        candidate.type === shot.type && candidate.status === 'selected' && candidate.estimatedCost > 0
+      )?.estimatedCost
+      const anyCost = item.shots.find(candidate => candidate.status === 'selected')?.estimatedCost ?? 0
+      const customShot = {
+        shotId: `custom-${Date.now().toString(36)}`,
+        shotName: shot.name,
+        type: shot.type,
+        priority: shot.priority,
+        required: shot.priority === 'P0',
+        isCustom: true,
+        promptHints: shot.promptHints,
+        status: 'selected' as const,
+        source: 'ai' as const,
+        assetId: null,
+        reason: '',
+        estimatedCost: sameTypeCost ?? anyCost,
+      }
+      return { ...item, shots: [...item.shots, customShot] }
+    })
+    const nextItems = recalculateShotPlanItems(items)
+    return {
+      shotPlan: {
+        ...state.shotPlan,
+        items: nextItems,
+        selectedCount: nextItems.reduce((sum, item) => sum + item.selectedCount, 0),
+        estimatedCost: nextItems.reduce((sum, item) => sum + item.estimatedCost, 0),
+      },
+    }
+  }),
 
   startGeneration: async () => {
     let outputs = get().nodes

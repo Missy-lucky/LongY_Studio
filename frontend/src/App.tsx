@@ -12,6 +12,7 @@ import { QueueBar } from './components/layout/QueueBar'
 import { CommandPalette } from './components/CommandPalette'
 import { ContextMenu } from './components/ContextMenu'
 import { PlanPreview } from './components/plan/PlanPreview'
+import { ShotPlanReviewDialog } from './components/nodes/ShotPlanReviewDialog'
 import { RejectReasonDialog } from './components/review/RejectReasonDialog'
 import { ExportPreviewModal } from './components/export/ExportPreviewModal'
 import { NewProjectDialog } from './components/common/NewProjectDialog'
@@ -64,6 +65,7 @@ export default function App() {
         <CommandPalette/>
         <ContextMenu/>
         <PlanPreview/>
+        <ShotPlanReviewDialog/>
         <RejectReasonDialog/>
         <ExportPreviewModal/>
         <NewProjectDialog/>

@@ -226,3 +226,49 @@ def test_editable_shot_plan_controls_cost_and_coverage():
         assert preview["coverageComplete"]
         waived = [item for item in preview["coverage"] if item["source"] == "manual"]
         assert waived and all(item["ready"] for item in waived)
+
+def test_custom_shot_can_be_added_and_planned():
+    import uuid
+
+    with TestClient(app) as client:
+        suffix = uuid.uuid4().hex[:6]
+        project = client.post("/api/projects", json={
+            "sku": f"CUSTOM-{suffix}", "name": "自定义镜头测试", "platform": "taobao",
+            "style": "简约", "budget": 10,
+        }).json()
+        pid = project["id"]
+        item = client.post(f"/api/projects/{pid}/items", json={
+            "name": "工装裤", "categoryId": "pants", "attributes": {},
+        }).json()
+        saved = client.put(f"/api/projects/{pid}/tasks/shot-selections", json={"selections": [{
+            "itemId": item["id"], "shotId": "custom-reflective-strip",
+            "shotName": "反光条特写", "type": "detail", "priority": "P0",
+            "required": True, "isCustom": True, "status": "selected", "source": "ai",
+            "reason": "", "promptHints": "微距展示反光条反光效果与缝线",
+        }]})
+        assert saved.status_code == 200
+        preview = client.post(f"/api/projects/{pid}/tasks/plan/preview", json={
+            "presetId": "draft-first", "provider": "mock", "modelIds": ["chinese-grand"],
+        }).json()
+        custom = [shot for shot in preview["items"][0]["shots"] if shot["isCustom"]]
+        assert [shot["shotName"] for shot in custom] == ["反光条特写"]
+
+        planned = client.post(f"/api/projects/{pid}/tasks/plan", json={
+            "presetId": "draft-first", "provider": "mock", "replaceExisting": True,
+            "modelIds": ["chinese-grand"], "shotIds": ["custom-reflective-strip"],
+        }).json()
+        assert len(planned["planned"]) == 1
+        task = client.get(f"/api/projects/{pid}/tasks").json()["tasks"][0]
+        assert task["shotName"] == "反光条特写"
+        assert "反光条反光效果" in task["prompt"]
+
+        preview = client.get(f"/api/projects/{pid}/exports/preview").json()
+        assert "反光条特写" in preview["missingShotNames"]
+        db = get_db()
+        try:
+            db.execute("UPDATE tasks SET status='accepted' WHERE project_id=?", (pid,))
+            db.commit()
+        finally:
+            db.close()
+        custom_ready = [item for item in client.get(f"/api/projects/{pid}/exports/preview").json()["coverage"] if item["shotId"] == "custom-reflective-strip"]
+        assert custom_ready and custom_ready[0]["ready"]

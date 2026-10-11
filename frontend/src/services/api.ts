@@ -78,6 +78,58 @@ export interface ProviderInfo {
   rateLimitPerMin: number
   available?: boolean
 }
+export type ShotPlanStatus = 'proposed' | 'selected' | 'fulfilled' | 'waived'
+
+export interface ShotPlanShot {
+  shotId: string
+  shotName: string
+  type: RemoteTask['type']
+  priority: ShotPriority
+  required: boolean
+  isCustom: boolean
+  promptHints: string
+  status: ShotPlanStatus
+  source: 'ai' | 'asset' | 'manual'
+  assetId: string | null
+  reason: string
+  estimatedCost: number
+}
+
+export interface ShotPlanItem {
+  itemId: string
+  itemName: string
+  categoryId: string
+  categoryName: string
+  assets: Array<{ id: string; viewSlot: string | null; filePath: string }>
+  shots: ShotPlanShot[]
+  selectedCount: number
+  estimatedCost: number
+}
+
+export interface ShotPlanPreview {
+  presetId: string
+  tier: RemoteTask['tier']
+  provider: ProviderId | string
+  items: ShotPlanItem[]
+  selectedCount: number
+  estimatedCost: number
+}
+
+export interface ShotSelectionInput {
+  itemId: string
+  shotId: string
+  shotName: string
+  type: RemoteTask['type']
+  priority: ShotPriority
+  required: boolean
+  isCustom: boolean
+  status: Exclude<ShotPlanStatus, 'proposed'>
+  source: 'ai' | 'asset' | 'manual'
+  assetId?: string | null
+  reason: string
+  promptHints: string
+}
+
 export interface ExportCoverageItem {
   itemId: string
   itemName: string
@@ -138,10 +190,26 @@ export const api = {
       body: JSON.stringify({ itemId, categoryId, viewSlot }),
     }),
   listProviders: () => request<{ providers: ProviderInfo[] }>('/providers'),
-  planTasks: (projectId: string, modelIds: string[], providerId: ProviderId | string = 'mock') =>
-    request<{ planned: Array<{ id: string }>; cached: Array<{ id: string }> }>(`/projects/${projectId}/tasks/plan`, {
+  previewShotPlan: (projectId: string, modelIds: string[], providerId: ProviderId | string = 'mock') =>
+    request<ShotPlanPreview>(`/projects/${projectId}/tasks/plan/preview`, {
       method: 'POST',
-      body: JSON.stringify({ presetId: 'fast-check', provider: providerId, replaceExisting: true, modelIds }),
+      body: JSON.stringify({ presetId: 'fast-check', provider: providerId, modelIds }),
+    }),
+  saveShotSelections: (projectId: string, selections: ShotSelectionInput[]) =>
+    request<{ saved: number }>(`/projects/${projectId}/tasks/shot-selections`, {
+      method: 'PUT',
+      body: JSON.stringify({ selections }),
+    }),
+  planTasks: (
+    projectId: string,
+    modelIds: string[],
+    providerId: ProviderId | string = 'mock',
+    shotIds?: string[],
+  ) => request<{ planned: Array<{ id: string }>; cached: Array<{ id: string }> }>(`/projects/${projectId}/tasks/plan`, {
+      method: 'POST',
+      body: JSON.stringify({
+        presetId: 'fast-check', provider: providerId, replaceExisting: true, modelIds, shotIds,
+      }),
     }),
   listTasks: (projectId: string) =>
     request<{ tasks: RemoteTask[] }>(`/projects/${projectId}/tasks`),
