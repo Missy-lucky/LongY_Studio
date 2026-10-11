@@ -1,0 +1,240 @@
+{
+  "schema": "longy.shot-template.v1",
+  "id": "earring-shot-v1",
+  "category": "earring",
+  "categoryName": "耳环",
+  "group": "配饰",
+  "version": "1.0.0",
+  "updatedAt": "2026-10-11",
+  "description": "耳环品类标准电商套图镜头清单。任务规划器按 shots 自动展开任务，按 conditionalShots 与商品属性自动加减镜头，导出前按模板做完整性校验。",
+  "attributes": [
+    {
+      "key": "isDangle",
+      "label": "垂坠式",
+      "type": "boolean",
+      "default": false
+    }
+  ],
+  "defaults": {
+    "tier": "draft",
+    "outputByType": {
+      "flat": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "partial": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      },
+      "detail": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "model": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      }
+    },
+    "referenceRoles": {
+      "garment": "商品原始图，结构与颜色的唯一权威来源",
+      "model-identity": "v2 定稿模特身份参考，锁定脸型与身形",
+      "style": "商业展示风格参考，只借构图与光线，不借人和衣服"
+    }
+  },
+  "shots": {
+    "flat": [
+      {
+        "id": "flat-front",
+        "name": "单只正面图",
+        "type": "flat",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "单只正面微距，造型完整清晰",
+        "references": [
+          "garment"
+        ],
+        "platformUse": "主图第1张"
+      },
+      {
+        "id": "flat-pair",
+        "name": "成对摆放图",
+        "type": "flat",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "成对摆放展示",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "flat-scale",
+        "name": "尺寸对比图",
+        "type": "flat",
+        "required": false,
+        "priority": "P2",
+        "promptHints": "与常见物品对比尺寸",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "partial": [
+      {
+        "id": "partial-macro",
+        "name": "微距形态图",
+        "type": "partial",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "悬挂微距，展示立体结构",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "detail": [
+      {
+        "id": "detail-front",
+        "name": "正面细节图",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "正面结构与镶嵌",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-side",
+        "name": "侧面细节图",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "侧面厚度与立体结构",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-craft",
+        "name": "镶嵌工艺特写",
+        "type": "detail",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "爪镶或工艺细节",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "model": [
+      {
+        "id": "model-ear-closeup",
+        "name": "耳部特写模特图",
+        "type": "model",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "模特耳部佩戴特写",
+        "references": [
+          "garment",
+          "model-identity"
+        ],
+        "platformUse": "主图第2张"
+      },
+      {
+        "id": "model-face-side",
+        "name": "侧脸半身模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "侧脸构图突出耳饰",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      },
+      {
+        "id": "model-half-front",
+        "name": "正面半身模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "正面半身整体搭配",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      }
+    ]
+  },
+  "conditionalShots": [
+    {
+      "when": {
+        "attribute": "isDangle",
+        "equals": true
+      },
+      "add": [
+        {
+          "id": "model-dangle",
+          "name": "垂坠效果模特图",
+          "type": "model",
+          "required": false,
+          "priority": "P1",
+          "promptHints": "转头动作下垂坠摆动",
+          "references": [
+            "garment",
+            "model-identity"
+          ]
+        }
+      ]
+    }
+  ],
+  "detailPageModules": [
+    {
+      "id": "module-scene",
+      "name": "场景搭配图",
+      "priority": "P1",
+      "generate": true,
+      "promptHints": "真实使用场景，展示佩戴或使用状态"
+    },
+    {
+      "id": "module-selling-points",
+      "name": "卖点图",
+      "priority": "P0",
+      "generate": true,
+      "promptHints": "围绕材质工艺卖点，预留文案排版空间"
+    },
+    {
+      "id": "module-spec-chart",
+      "name": "规格参数表",
+      "priority": "P0",
+      "generate": false,
+      "note": "尺寸重量材质参数，用设计模板输出，不走AI生图"
+    },
+    {
+      "id": "module-care",
+      "name": "保养说明",
+      "priority": "P2",
+      "generate": false,
+      "note": "固定设计模板"
+    }
+  ],
+  "platformPresets": {
+    "taobao": {
+      "mainImages": [
+        "flat-front",
+        "model-front-full",
+        "detail-front",
+        "module-scene",
+        "module-selling-points"
+      ],
+      "minSize": "800x800",
+      "recommendedSize": "1200x1200"
+    }
+  }
+}

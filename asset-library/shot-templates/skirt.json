@@ -1,0 +1,303 @@
+{
+  "schema": "longy.shot-template.v1",
+  "id": "skirt-shot-v1",
+  "category": "skirt",
+  "categoryName": "裙子",
+  "group": "下装",
+  "version": "1.0.0",
+  "updatedAt": "2026-10-11",
+  "description": "裙子品类标准电商套图镜头清单。任务规划器按 shots 自动展开任务，按 conditionalShots 与商品属性自动加减镜头，导出前按模板做完整性校验。",
+  "attributes": [
+    {
+      "key": "hasSlit",
+      "label": "开叉",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "key": "hasZip",
+      "label": "拉链",
+      "type": "boolean",
+      "default": true
+    }
+  ],
+  "defaults": {
+    "tier": "draft",
+    "outputByType": {
+      "flat": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "partial": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      },
+      "detail": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "model": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      }
+    },
+    "referenceRoles": {
+      "garment": "商品原始图，结构与颜色的唯一权威来源",
+      "model-identity": "v2 定稿模特身份参考，锁定脸型与身形",
+      "style": "商业展示风格参考，只借构图与光线，不借人和衣服"
+    }
+  },
+  "shots": {
+    "flat": [
+      {
+        "id": "flat-front",
+        "name": "正面平铺图",
+        "type": "flat",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "正面完整平铺，左右对称，纯白背景，四周留白充足",
+        "references": [
+          "garment"
+        ],
+        "platformUse": "主图第1张，详情页首屏"
+      },
+      {
+        "id": "flat-back",
+        "name": "背面平铺图",
+        "type": "flat",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "背面完整平铺，与正面同比例同构图",
+        "references": [
+          "garment"
+        ],
+        "platformUse": "详情页版型结构屏"
+      }
+    ],
+    "partial": [
+      {
+        "id": "partial-hanging-front",
+        "name": "正面悬挂展示图",
+        "type": "partial",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "腰头悬挂，裙摆自然垂坠",
+        "references": [
+          "garment",
+          "style"
+        ]
+      },
+      {
+        "id": "partial-hanging-side",
+        "name": "侧面悬挂展示图",
+        "type": "partial",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "侧面悬挂，展示裙型轮廓",
+        "references": [
+          "garment",
+          "style"
+        ]
+      },
+      {
+        "id": "partial-hem-drape",
+        "name": "裙摆垂坠形态图",
+        "type": "partial",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "裙摆摆动后的垂坠形态",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "detail": [
+      {
+        "id": "detail-waistband",
+        "name": "腰头特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "腰头宽度、缝线与开合方式",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-hem",
+        "name": "裙摆边特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "裙摆卷边与缝线",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-fabric",
+        "name": "面料纹理特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "微距展示面料垂坠感",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "model": [
+      {
+        "id": "model-front-full",
+        "name": "正面全身模特图",
+        "type": "model",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "正面站姿，展示裙长与比例",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ],
+        "platformUse": "主图第2张"
+      },
+      {
+        "id": "model-back-full",
+        "name": "背面全身模特图",
+        "type": "model",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "背面站姿，展示背部剪裁",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "model-side-full",
+        "name": "侧面全身模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "侧面站姿，展示裙型轮廓",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      },
+      {
+        "id": "model-walking",
+        "name": "行走动态模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "行走中裙摆自然摆动",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      },
+      {
+        "id": "model-sitting",
+        "name": "坐姿模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P2",
+        "promptHints": "坐姿展示裙摆铺展",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      }
+    ]
+  },
+  "conditionalShots": [
+    {
+      "when": {
+        "attribute": "hasSlit",
+        "equals": true
+      },
+      "add": [
+        {
+          "id": "detail-slit",
+          "name": "开叉特写",
+          "type": "detail",
+          "required": false,
+          "priority": "P1",
+          "promptHints": "开叉高度与内衬处理",
+          "references": [
+            "garment"
+          ]
+        }
+      ]
+    },
+    {
+      "when": {
+        "attribute": "hasZip",
+        "equals": true
+      },
+      "add": [
+        {
+          "id": "detail-zipper",
+          "name": "拉链特写",
+          "type": "detail",
+          "required": false,
+          "priority": "P1",
+          "promptHints": "隐形拉链与腰头衔接",
+          "references": [
+            "garment"
+          ]
+        }
+      ]
+    }
+  ],
+  "detailPageModules": [
+    {
+      "id": "module-scene",
+      "name": "场景生活图",
+      "priority": "P1",
+      "generate": true,
+      "promptHints": "真实生活场景，模特与环境自然互动"
+    },
+    {
+      "id": "module-selling-points",
+      "name": "卖点图",
+      "priority": "P0",
+      "generate": true,
+      "promptHints": "围绕核心卖点，预留文案排版空间"
+    },
+    {
+      "id": "module-size-chart",
+      "name": "尺码表",
+      "priority": "P0",
+      "generate": false,
+      "note": "按平台规格用设计模板输出，不走AI生图"
+    },
+    {
+      "id": "module-care",
+      "name": "洗护说明",
+      "priority": "P2",
+      "generate": false,
+      "note": "固定设计模板"
+    }
+  ],
+  "platformPresets": {
+    "taobao": {
+      "mainImages": [
+        "flat-front",
+        "model-front-full",
+        "detail-fabric",
+        "module-scene",
+        "module-selling-points"
+      ],
+      "minSize": "800x800",
+      "recommendedSize": "1200x1200"
+    }
+  }
+}

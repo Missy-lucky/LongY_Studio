@@ -1,0 +1,256 @@
+{
+  "schema": "longy.shot-template.v1",
+  "id": "backpack-shot-v1",
+  "category": "backpack",
+  "categoryName": "背包",
+  "group": "包袋",
+  "version": "1.0.0",
+  "updatedAt": "2026-10-11",
+  "description": "背包品类标准电商套图镜头清单。任务规划器按 shots 自动展开任务，按 conditionalShots 与商品属性自动加减镜头，导出前按模板做完整性校验。",
+  "attributes": [
+    {
+      "key": "hasLaptopCompartment",
+      "label": "电脑隔层",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "key": "hasSidePocket",
+      "label": "侧袋",
+      "type": "boolean",
+      "default": true
+    }
+  ],
+  "defaults": {
+    "tier": "draft",
+    "outputByType": {
+      "flat": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "partial": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      },
+      "detail": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "model": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      }
+    },
+    "referenceRoles": {
+      "garment": "商品原始图，结构与颜色的唯一权威来源",
+      "model-identity": "v2 定稿模特身份参考，锁定脸型与身形",
+      "style": "商业展示风格参考，只借构图与光线，不借人和衣服"
+    }
+  },
+  "shots": {
+    "flat": [
+      {
+        "id": "flat-front",
+        "name": "正面商品图",
+        "type": "flat",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "包体正面完整展示",
+        "references": [
+          "garment"
+        ],
+        "platformUse": "主图第1张"
+      },
+      {
+        "id": "flat-side",
+        "name": "侧面商品图",
+        "type": "flat",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "侧面展示厚度与廓形",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "partial": [
+      {
+        "id": "partial-back",
+        "name": "背面结构图",
+        "type": "partial",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "背包背面背负系统展示",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "detail": [
+      {
+        "id": "detail-front",
+        "name": "正面设计特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "正面口袋与结构设计",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-side-pocket",
+        "name": "侧袋特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "侧袋位置与容量",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-strap",
+        "name": "肩带特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "肩带填充与调节结构",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-fabric",
+        "name": "面料特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "面料纹理与防水涂层",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-lining",
+        "name": "内衬特写",
+        "type": "detail",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "内衬与主袋结构",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "model": [
+      {
+        "id": "model-back-full",
+        "name": "背面全身模特图",
+        "type": "model",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "模特背包背面全身",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ],
+        "platformUse": "主图第2张"
+      },
+      {
+        "id": "model-side-full",
+        "name": "侧面全身模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "侧面全身，展示背负廓形",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      },
+      {
+        "id": "model-adjust",
+        "name": "调节肩带特写模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P2",
+        "promptHints": "调节肩带的动态细节",
+        "references": [
+          "garment",
+          "model-identity"
+        ]
+      }
+    ]
+  },
+  "conditionalShots": [
+    {
+      "when": {
+        "attribute": "hasLaptopCompartment",
+        "equals": true
+      },
+      "add": [
+        {
+          "id": "detail-laptop-compartment",
+          "name": "电脑隔层特写",
+          "type": "detail",
+          "required": false,
+          "priority": "P1",
+          "promptHints": "内部电脑隔层与缓冲",
+          "references": [
+            "garment"
+          ]
+        }
+      ]
+    }
+  ],
+  "detailPageModules": [
+    {
+      "id": "module-scene",
+      "name": "场景搭配图",
+      "priority": "P1",
+      "generate": true,
+      "promptHints": "真实使用场景，展示佩戴或使用状态"
+    },
+    {
+      "id": "module-selling-points",
+      "name": "卖点图",
+      "priority": "P0",
+      "generate": true,
+      "promptHints": "围绕材质工艺卖点，预留文案排版空间"
+    },
+    {
+      "id": "module-spec-chart",
+      "name": "规格参数表",
+      "priority": "P0",
+      "generate": false,
+      "note": "尺寸重量材质参数，用设计模板输出，不走AI生图"
+    },
+    {
+      "id": "module-care",
+      "name": "保养说明",
+      "priority": "P2",
+      "generate": false,
+      "note": "固定设计模板"
+    }
+  ],
+  "platformPresets": {
+    "taobao": {
+      "mainImages": [
+        "flat-front",
+        "model-front-full",
+        "detail-strap",
+        "module-scene",
+        "module-selling-points"
+      ],
+      "minSize": "800x800",
+      "recommendedSize": "1200x1200"
+    }
+  }
+}

@@ -1,0 +1,237 @@
+{
+  "schema": "longy.shot-template.v1",
+  "id": "slippers-shot-v1",
+  "category": "slippers",
+  "categoryName": "拖鞋",
+  "group": "鞋履",
+  "version": "1.0.0",
+  "updatedAt": "2026-10-11",
+  "description": "拖鞋品类标准电商套图镜头清单。任务规划器按 shots 自动展开任务，按 conditionalShots 与商品属性自动加减镜头，导出前按模板做完整性校验。",
+  "attributes": [
+    {
+      "key": "hasFur",
+      "label": "毛绒",
+      "type": "boolean",
+      "default": false
+    }
+  ],
+  "defaults": {
+    "tier": "draft",
+    "outputByType": {
+      "flat": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "partial": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      },
+      "detail": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "model": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      }
+    },
+    "referenceRoles": {
+      "garment": "商品原始图，结构与颜色的唯一权威来源",
+      "model-identity": "v2 定稿模特身份参考，锁定脸型与身形",
+      "style": "商业展示风格参考，只借构图与光线，不借人和衣服"
+    }
+  },
+  "shots": {
+    "flat": [
+      {
+        "id": "flat-side",
+        "name": "侧面商品图",
+        "type": "flat",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "单只侧面完整展示，鞋型轮廓清晰，纯白背景",
+        "references": [
+          "garment"
+        ],
+        "platformUse": "主图第1张"
+      },
+      {
+        "id": "flat-front",
+        "name": "正面商品图",
+        "type": "flat",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "单只正面鞋头视角",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "flat-pair",
+        "name": "双只组合图",
+        "type": "flat",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "双只前后错位摆放，展示整体造型",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "flat-sole",
+        "name": "鞋底图",
+        "type": "flat",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "鞋底纹路与材质完整展示",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "partial": [
+      {
+        "id": "partial-on-foot",
+        "name": "上脚静态展示图",
+        "type": "partial",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "脚部静止站立，展示上脚包裹",
+        "references": [
+          "garment",
+          "style"
+        ]
+      }
+    ],
+    "detail": [
+      {
+        "id": "detail-upper",
+        "name": "鞋面特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "鞋面材质与做工",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-sole",
+        "name": "鞋底特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "鞋底材质与防滑纹",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-footbed",
+        "name": "鞋垫特写",
+        "type": "detail",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "鞋垫材质与厚度",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "model": [
+      {
+        "id": "model-foot-closeup",
+        "name": "脚部特写模特图",
+        "type": "model",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "脚部特写，展示包裹与服帖",
+        "references": [
+          "garment",
+          "model-identity"
+        ]
+      },
+      {
+        "id": "model-casual-half",
+        "name": "居家休闲半身模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "居家场景半身，展示搭配氛围",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      }
+    ]
+  },
+  "conditionalShots": [
+    {
+      "when": {
+        "attribute": "hasFur",
+        "equals": true
+      },
+      "add": [
+        {
+          "id": "detail-lining",
+          "name": "毛绒内里特写",
+          "type": "detail",
+          "required": true,
+          "priority": "P0",
+          "promptHints": "鞋口毛绒厚度",
+          "references": [
+            "garment"
+          ]
+        }
+      ]
+    }
+  ],
+  "detailPageModules": [
+    {
+      "id": "module-scene",
+      "name": "场景搭配图",
+      "priority": "P1",
+      "generate": true,
+      "promptHints": "真实穿搭场景，展示鞋与整体搭配"
+    },
+    {
+      "id": "module-selling-points",
+      "name": "卖点图",
+      "priority": "P0",
+      "generate": true,
+      "promptHints": "围绕工艺舒适度卖点，预留文案排版空间"
+    },
+    {
+      "id": "module-size-chart",
+      "name": "试穿尺码表",
+      "priority": "P0",
+      "generate": false,
+      "note": "按平台规格用设计模板输出，不走AI生图"
+    },
+    {
+      "id": "module-care",
+      "name": "保养说明",
+      "priority": "P2",
+      "generate": false,
+      "note": "固定设计模板"
+    }
+  ],
+  "platformPresets": {
+    "taobao": {
+      "mainImages": [
+        "flat-side",
+        "model-foot-closeup",
+        "detail-upper",
+        "module-scene",
+        "module-selling-points"
+      ],
+      "minSize": "800x800",
+      "recommendedSize": "1200x1200"
+    }
+  }
+}

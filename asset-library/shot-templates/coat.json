@@ -1,0 +1,388 @@
+{
+  "schema": "longy.shot-template.v1",
+  "id": "coat-shot-v1",
+  "category": "coat",
+  "categoryName": "外套",
+  "group": "上装",
+  "version": "1.0.0",
+  "updatedAt": "2026-10-11",
+  "description": "外套品类标准电商套图镜头清单。任务规划器按 shots 自动展开任务，按 conditionalShots 与商品属性自动加减镜头，导出前按模板做完整性校验。",
+  "attributes": [
+    {
+      "key": "hasBelt",
+      "label": "腰带",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "key": "hasLining",
+      "label": "内衬",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "key": "hasHood",
+      "label": "连帽",
+      "type": "boolean",
+      "default": false
+    }
+  ],
+  "defaults": {
+    "tier": "draft",
+    "outputByType": {
+      "flat": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "partial": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      },
+      "detail": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "model": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      }
+    },
+    "referenceRoles": {
+      "garment": "商品原始图，结构与颜色的唯一权威来源",
+      "model-identity": "v2 定稿模特身份参考，锁定脸型与身形",
+      "style": "商业展示风格参考，只借构图与光线，不借人和衣服"
+    }
+  },
+  "shots": {
+    "flat": [
+      {
+        "id": "flat-front",
+        "name": "正面平铺图",
+        "type": "flat",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "正面完整平铺，双袖对称展开，纯白背景，四周留白充足",
+        "references": [
+          "garment"
+        ],
+        "platformUse": "主图第1张，详情页首屏"
+      },
+      {
+        "id": "flat-back",
+        "name": "背面平铺图",
+        "type": "flat",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "背面完整平铺，与正面同比例同构图",
+        "references": [
+          "garment"
+        ],
+        "platformUse": "详情页版型结构屏"
+      }
+    ],
+    "partial": [
+      {
+        "id": "partial-hanging-front",
+        "name": "正面悬挂展示图",
+        "type": "partial",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "衣架正面悬挂，微侧5到10度，自然垂坠，柔和室内光",
+        "references": [
+          "garment",
+          "style"
+        ]
+      },
+      {
+        "id": "partial-hanging-side",
+        "name": "侧面45度悬挂展示图",
+        "type": "partial",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "侧面45度悬挂，展示衣服厚度与轮廓",
+        "references": [
+          "garment",
+          "style"
+        ]
+      },
+      {
+        "id": "partial-drape",
+        "name": "面料垂坠形态图",
+        "type": "partial",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "局部提起面料，展示垂坠感与厚度",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "partial-open",
+        "name": "敞开悬挂展示图",
+        "type": "partial",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "敞开衣襟悬挂，展示内搭层次与廓形",
+        "references": [
+          "garment",
+          "style"
+        ]
+      },
+      {
+        "id": "partial-closed",
+        "name": "系扣悬挂展示图",
+        "type": "partial",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "系扣悬挂，展示完整廓形",
+        "references": [
+          "garment",
+          "style"
+        ]
+      }
+    ],
+    "detail": [
+      {
+        "id": "detail-lapel",
+        "name": "翻领特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "翻领结构与走线",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-button",
+        "name": "纽扣特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "纽扣材质与扣眼工艺",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-pocket",
+        "name": "口袋特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "口袋位置与袋盖结构",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-fabric",
+        "name": "面料纹理特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "微距展示呢料或纤维质感",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "model": [
+      {
+        "id": "model-front-full",
+        "name": "正面全身模特图",
+        "type": "model",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "正面站姿，双手自然下垂，全身入镜，表情自然，纯白棚拍背景",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ],
+        "platformUse": "主图第2张"
+      },
+      {
+        "id": "model-back-full",
+        "name": "背面全身模特图",
+        "type": "model",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "背面站姿，展示背部版型",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "model-side-full",
+        "name": "侧面全身模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "侧面站姿，展示侧轮廓与厚度",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      },
+      {
+        "id": "model-walking",
+        "name": "行走动态模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "自然行走动态，衣摆随动作微动",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      },
+      {
+        "id": "model-upper-closeup",
+        "name": "上半身特写模特图",
+        "type": "model",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "取面部到腰部，展示领口与搭配关系",
+        "references": [
+          "garment",
+          "model-identity"
+        ]
+      },
+      {
+        "id": "model-sitting",
+        "name": "坐姿场景模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P2",
+        "promptHints": "休闲坐姿，适合场景化详情页",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      },
+      {
+        "id": "model-open-front",
+        "name": "敞开正面全身模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "敞开衣襟正面站姿，展示内搭层次",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      }
+    ]
+  },
+  "conditionalShots": [
+    {
+      "when": {
+        "attribute": "hasBelt",
+        "equals": true
+      },
+      "add": [
+        {
+          "id": "detail-belt",
+          "name": "腰带特写",
+          "type": "detail",
+          "required": false,
+          "priority": "P1",
+          "promptHints": "腰带扣与系法",
+          "references": [
+            "garment"
+          ]
+        }
+      ]
+    },
+    {
+      "when": {
+        "attribute": "hasLining",
+        "equals": true
+      },
+      "add": [
+        {
+          "id": "partial-lining",
+          "name": "内里展示图",
+          "type": "partial",
+          "required": false,
+          "priority": "P1",
+          "promptHints": "翻开衣襟，展示内衬材质与做工",
+          "references": [
+            "garment"
+          ]
+        }
+      ]
+    },
+    {
+      "when": {
+        "attribute": "hasHood",
+        "equals": true
+      },
+      "add": [
+        {
+          "id": "detail-hood",
+          "name": "帽型特写",
+          "type": "detail",
+          "required": true,
+          "priority": "P0",
+          "promptHints": "帽体立起，展示帽型厚度与走线",
+          "references": [
+            "garment"
+          ]
+        }
+      ]
+    }
+  ],
+  "detailPageModules": [
+    {
+      "id": "module-scene",
+      "name": "场景生活图",
+      "priority": "P1",
+      "generate": true,
+      "promptHints": "真实生活场景，模特与环境自然互动"
+    },
+    {
+      "id": "module-selling-points",
+      "name": "卖点图",
+      "priority": "P0",
+      "generate": true,
+      "promptHints": "围绕核心卖点，预留文案排版空间"
+    },
+    {
+      "id": "module-size-chart",
+      "name": "尺码表",
+      "priority": "P0",
+      "generate": false,
+      "note": "按平台规格用设计模板输出，不走AI生图"
+    },
+    {
+      "id": "module-care",
+      "name": "洗护说明",
+      "priority": "P2",
+      "generate": false,
+      "note": "固定设计模板"
+    }
+  ],
+  "platformPresets": {
+    "taobao": {
+      "mainImages": [
+        "flat-front",
+        "model-front-full",
+        "detail-fabric",
+        "module-scene",
+        "module-selling-points"
+      ],
+      "minSize": "800x800",
+      "recommendedSize": "1200x1200"
+    }
+  }
+}

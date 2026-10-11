@@ -1,0 +1,245 @@
+{
+  "schema": "longy.shot-template.v1",
+  "id": "scarf-shot-v1",
+  "category": "scarf",
+  "categoryName": "围巾",
+  "group": "配饰",
+  "version": "1.0.0",
+  "updatedAt": "2026-10-11",
+  "description": "围巾品类标准电商套图镜头清单。任务规划器按 shots 自动展开任务，按 conditionalShots 与商品属性自动加减镜头，导出前按模板做完整性校验。",
+  "attributes": [
+    {
+      "key": "isSilk",
+      "label": "丝质",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "key": "hasFringe",
+      "label": "流苏",
+      "type": "boolean",
+      "default": true
+    }
+  ],
+  "defaults": {
+    "tier": "draft",
+    "outputByType": {
+      "flat": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "partial": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      },
+      "detail": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "model": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      }
+    },
+    "referenceRoles": {
+      "garment": "商品原始图，结构与颜色的唯一权威来源",
+      "model-identity": "v2 定稿模特身份参考，锁定脸型与身形",
+      "style": "商业展示风格参考，只借构图与光线，不借人和衣服"
+    }
+  },
+  "shots": {
+    "flat": [
+      {
+        "id": "flat-front",
+        "name": "完整展开图",
+        "type": "flat",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "围巾完整展开平铺，展示整体图案",
+        "references": [
+          "garment"
+        ],
+        "platformUse": "主图第1张"
+      },
+      {
+        "id": "flat-folded",
+        "name": "折叠摆放图",
+        "type": "flat",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "折叠摆放展示厚度",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "partial": [
+      {
+        "id": "partial-drape",
+        "name": "悬垂形态图",
+        "type": "partial",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "自然悬垂，展示垂坠感",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "detail": [
+      {
+        "id": "detail-texture",
+        "name": "纹理特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "微距展示面料纹理",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-fringe",
+        "name": "流苏特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "流苏密度与手工细节",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-weave",
+        "name": "织法特写",
+        "type": "detail",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "织法组织结构",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "model": [
+      {
+        "id": "model-neck-front",
+        "name": "颈部正面佩戴模特图",
+        "type": "model",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "正面颈部系法",
+        "references": [
+          "garment",
+          "model-identity"
+        ],
+        "platformUse": "主图第2张"
+      },
+      {
+        "id": "model-neck-side",
+        "name": "颈部侧面佩戴模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "侧面佩戴层次",
+        "references": [
+          "garment",
+          "model-identity"
+        ]
+      },
+      {
+        "id": "model-half-front",
+        "name": "半身正面模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "半身整体搭配",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      },
+      {
+        "id": "model-second-tying",
+        "name": "第二种系法模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P2",
+        "promptHints": "换一种系法的佩戴效果",
+        "references": [
+          "garment",
+          "model-identity"
+        ]
+      }
+    ]
+  },
+  "conditionalShots": [
+    {
+      "when": {
+        "attribute": "isSilk",
+        "equals": true
+      },
+      "add": [
+        {
+          "id": "detail-silk-sheen",
+          "name": "丝质光泽特写",
+          "type": "detail",
+          "required": false,
+          "priority": "P1",
+          "promptHints": "丝绸光泽与垂坠",
+          "references": [
+            "garment"
+          ]
+        }
+      ]
+    }
+  ],
+  "detailPageModules": [
+    {
+      "id": "module-scene",
+      "name": "场景搭配图",
+      "priority": "P1",
+      "generate": true,
+      "promptHints": "真实使用场景，展示佩戴或使用状态"
+    },
+    {
+      "id": "module-selling-points",
+      "name": "卖点图",
+      "priority": "P0",
+      "generate": true,
+      "promptHints": "围绕材质工艺卖点，预留文案排版空间"
+    },
+    {
+      "id": "module-spec-chart",
+      "name": "规格参数表",
+      "priority": "P0",
+      "generate": false,
+      "note": "尺寸重量材质参数，用设计模板输出，不走AI生图"
+    },
+    {
+      "id": "module-care",
+      "name": "保养说明",
+      "priority": "P2",
+      "generate": false,
+      "note": "固定设计模板"
+    }
+  ],
+  "platformPresets": {
+    "taobao": {
+      "mainImages": [
+        "flat-front",
+        "model-front-full",
+        "detail-texture",
+        "module-scene",
+        "module-selling-points"
+      ],
+      "minSize": "800x800",
+      "recommendedSize": "1200x1200"
+    }
+  }
+}

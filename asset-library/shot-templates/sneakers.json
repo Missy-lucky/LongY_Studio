@@ -1,0 +1,290 @@
+{
+  "schema": "longy.shot-template.v1",
+  "id": "sneakers-shot-v1",
+  "category": "sneakers",
+  "categoryName": "运动鞋",
+  "group": "鞋履",
+  "version": "1.0.0",
+  "updatedAt": "2026-10-11",
+  "description": "运动鞋品类标准电商套图镜头清单。任务规划器按 shots 自动展开任务，按 conditionalShots 与商品属性自动加减镜头，导出前按模板做完整性校验。",
+  "attributes": [
+    {
+      "key": "hasLogo",
+      "label": "品牌标识",
+      "type": "boolean",
+      "default": true
+    }
+  ],
+  "defaults": {
+    "tier": "draft",
+    "outputByType": {
+      "flat": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "partial": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      },
+      "detail": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "model": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      }
+    },
+    "referenceRoles": {
+      "garment": "商品原始图，结构与颜色的唯一权威来源",
+      "model-identity": "v2 定稿模特身份参考，锁定脸型与身形",
+      "style": "商业展示风格参考，只借构图与光线，不借人和衣服"
+    }
+  },
+  "shots": {
+    "flat": [
+      {
+        "id": "flat-side",
+        "name": "侧面商品图",
+        "type": "flat",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "单只侧面完整展示，鞋型轮廓清晰，纯白背景",
+        "references": [
+          "garment"
+        ],
+        "platformUse": "主图第1张"
+      },
+      {
+        "id": "flat-front",
+        "name": "正面商品图",
+        "type": "flat",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "单只正面鞋头视角",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "flat-pair",
+        "name": "双只组合图",
+        "type": "flat",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "双只前后错位摆放，展示整体造型",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "flat-sole",
+        "name": "鞋底图",
+        "type": "flat",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "鞋底纹路与材质完整展示",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "partial": [
+      {
+        "id": "partial-on-foot",
+        "name": "上脚静态展示图",
+        "type": "partial",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "脚部静止站立，鞋型上脚效果清晰",
+        "references": [
+          "garment",
+          "style"
+        ]
+      },
+      {
+        "id": "partial-walking",
+        "name": "行走动态展示图",
+        "type": "partial",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "自然行走，展示鞋底弯折与贴合",
+        "references": [
+          "garment",
+          "style"
+        ]
+      },
+      {
+        "id": "partial-action",
+        "name": "运动动态展示图",
+        "type": "partial",
+        "required": false,
+        "priority": "P2",
+        "promptHints": "跑跳动作，展示鞋底动态",
+        "references": [
+          "garment",
+          "style"
+        ]
+      }
+    ],
+    "detail": [
+      {
+        "id": "detail-toe",
+        "name": "鞋头特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "鞋头造型与保护结构",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-laces",
+        "name": "鞋带特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "鞋带系统与鞋眼",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-cushion",
+        "name": "气垫中底特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "中底缓震科技截面或外观",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-logo",
+        "name": "品牌标识特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "鞋身标识与位置",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-outsole",
+        "name": "大底纹路特写",
+        "type": "detail",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "防滑纹路设计",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "model": [
+      {
+        "id": "model-front-full",
+        "name": "正面全身模特图",
+        "type": "model",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "正面站姿，鞋与裤脚衔接自然，全身入镜",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ],
+        "platformUse": "主图第2张"
+      },
+      {
+        "id": "model-back-full",
+        "name": "背面全身模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "背面站姿，展示鞋后跟设计",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      },
+      {
+        "id": "model-side-half",
+        "name": "侧面半身模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "侧面构图，突出鞋型侧面轮廓",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      },
+      {
+        "id": "model-leg-closeup",
+        "name": "小腿脚部特写模特图",
+        "type": "model",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "取小腿到脚部，展示鞋型上脚效果与裤脚衔接",
+        "references": [
+          "garment",
+          "model-identity"
+        ]
+      }
+    ]
+  },
+  "conditionalShots": [],
+  "detailPageModules": [
+    {
+      "id": "module-scene",
+      "name": "场景搭配图",
+      "priority": "P1",
+      "generate": true,
+      "promptHints": "真实穿搭场景，展示鞋与整体搭配"
+    },
+    {
+      "id": "module-selling-points",
+      "name": "卖点图",
+      "priority": "P0",
+      "generate": true,
+      "promptHints": "围绕工艺舒适度卖点，预留文案排版空间"
+    },
+    {
+      "id": "module-size-chart",
+      "name": "试穿尺码表",
+      "priority": "P0",
+      "generate": false,
+      "note": "按平台规格用设计模板输出，不走AI生图"
+    },
+    {
+      "id": "module-care",
+      "name": "保养说明",
+      "priority": "P2",
+      "generate": false,
+      "note": "固定设计模板"
+    }
+  ],
+  "platformPresets": {
+    "taobao": {
+      "mainImages": [
+        "flat-side",
+        "model-front-full",
+        "detail-cushion",
+        "module-scene",
+        "module-selling-points"
+      ],
+      "minSize": "800x800",
+      "recommendedSize": "1200x1200"
+    }
+  }
+}

@@ -1,0 +1,241 @@
+{
+  "schema": "longy.shot-template.v1",
+  "id": "crossbody-shot-v1",
+  "category": "crossbody",
+  "categoryName": "斜挎包",
+  "group": "包袋",
+  "version": "1.0.0",
+  "updatedAt": "2026-10-11",
+  "description": "斜挎包品类标准电商套图镜头清单。任务规划器按 shots 自动展开任务，按 conditionalShots 与商品属性自动加减镜头，导出前按模板做完整性校验。",
+  "attributes": [
+    {
+      "key": "hasAdjustableStrap",
+      "label": "可调节肩带",
+      "type": "boolean",
+      "default": true
+    }
+  ],
+  "defaults": {
+    "tier": "draft",
+    "outputByType": {
+      "flat": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "partial": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      },
+      "detail": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "model": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      }
+    },
+    "referenceRoles": {
+      "garment": "商品原始图，结构与颜色的唯一权威来源",
+      "model-identity": "v2 定稿模特身份参考，锁定脸型与身形",
+      "style": "商业展示风格参考，只借构图与光线，不借人和衣服"
+    }
+  },
+  "shots": {
+    "flat": [
+      {
+        "id": "flat-front",
+        "name": "正面商品图",
+        "type": "flat",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "包体正面完整展示",
+        "references": [
+          "garment"
+        ],
+        "platformUse": "主图第1张"
+      },
+      {
+        "id": "flat-side",
+        "name": "侧面商品图",
+        "type": "flat",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "侧面厚度与廓形",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "partial": [
+      {
+        "id": "partial-worn-side",
+        "name": "侧挎展示图",
+        "type": "partial",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "侧挎在模特身上的角度",
+        "references": [
+          "garment",
+          "style"
+        ]
+      }
+    ],
+    "detail": [
+      {
+        "id": "detail-body",
+        "name": "包身特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "包身结构与走线",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-strap",
+        "name": "肩带特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "肩带材质与调节扣",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-hardware",
+        "name": "五金件特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "五金扣件与光泽",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-fabric",
+        "name": "面料特写",
+        "type": "detail",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "皮革或织物纹理",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "model": [
+      {
+        "id": "model-crossbody-front",
+        "name": "斜挎正面半身模特图",
+        "type": "model",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "斜挎包位于身前的半身正面",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ],
+        "platformUse": "主图第2张"
+      },
+      {
+        "id": "model-side-full",
+        "name": "侧面全身模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "侧面全身携带状态",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      },
+      {
+        "id": "model-back",
+        "name": "背面模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P2",
+        "promptHints": "背面视角",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      }
+    ]
+  },
+  "conditionalShots": [
+    {
+      "when": {
+        "attribute": "hasAdjustableStrap",
+        "equals": true
+      },
+      "add": [
+        {
+          "id": "detail-strap-adjustor",
+          "name": "调节扣特写",
+          "type": "detail",
+          "required": false,
+          "priority": "P1",
+          "promptHints": "肩带调节结构",
+          "references": [
+            "garment"
+          ]
+        }
+      ]
+    }
+  ],
+  "detailPageModules": [
+    {
+      "id": "module-scene",
+      "name": "场景搭配图",
+      "priority": "P1",
+      "generate": true,
+      "promptHints": "真实使用场景，展示佩戴或使用状态"
+    },
+    {
+      "id": "module-selling-points",
+      "name": "卖点图",
+      "priority": "P0",
+      "generate": true,
+      "promptHints": "围绕材质工艺卖点，预留文案排版空间"
+    },
+    {
+      "id": "module-spec-chart",
+      "name": "规格参数表",
+      "priority": "P0",
+      "generate": false,
+      "note": "尺寸重量材质参数，用设计模板输出，不走AI生图"
+    },
+    {
+      "id": "module-care",
+      "name": "保养说明",
+      "priority": "P2",
+      "generate": false,
+      "note": "固定设计模板"
+    }
+  ],
+  "platformPresets": {
+    "taobao": {
+      "mainImages": [
+        "flat-front",
+        "model-front-full",
+        "detail-hardware",
+        "module-scene",
+        "module-selling-points"
+      ],
+      "minSize": "800x800",
+      "recommendedSize": "1200x1200"
+    }
+  }
+}

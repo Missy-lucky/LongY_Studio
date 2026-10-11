@@ -1,0 +1,278 @@
+{
+  "schema": "longy.shot-template.v1",
+  "id": "handbag-shot-v1",
+  "category": "handbag",
+  "categoryName": "手提包",
+  "group": "包袋",
+  "version": "1.0.0",
+  "updatedAt": "2026-10-11",
+  "description": "手提包品类标准电商套图镜头清单。任务规划器按 shots 自动展开任务，按 conditionalShots 与商品属性自动加减镜头，导出前按模板做完整性校验。",
+  "attributes": [
+    {
+      "key": "hasZip",
+      "label": "拉链",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "key": "hasDetachableStrap",
+      "label": "可拆卸肩带",
+      "type": "boolean",
+      "default": false
+    }
+  ],
+  "defaults": {
+    "tier": "draft",
+    "outputByType": {
+      "flat": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "partial": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      },
+      "detail": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "model": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      }
+    },
+    "referenceRoles": {
+      "garment": "商品原始图，结构与颜色的唯一权威来源",
+      "model-identity": "v2 定稿模特身份参考，锁定脸型与身形",
+      "style": "商业展示风格参考，只借构图与光线，不借人和衣服"
+    }
+  },
+  "shots": {
+    "flat": [
+      {
+        "id": "flat-front",
+        "name": "正面商品图",
+        "type": "flat",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "包体正面完整展示，纯白背景",
+        "references": [
+          "garment"
+        ],
+        "platformUse": "主图第1张"
+      },
+      {
+        "id": "flat-side",
+        "name": "侧面商品图",
+        "type": "flat",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "侧面展示包体厚度与廓形",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "flat-bottom",
+        "name": "底部商品图",
+        "type": "flat",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "底部铆钉与支撑结构",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "partial": [
+      {
+        "id": "partial-held",
+        "name": "手持展示图",
+        "type": "partial",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "手提状态，展示提手弧度与比例",
+        "references": [
+          "garment",
+          "style"
+        ]
+      },
+      {
+        "id": "partial-table",
+        "name": "场景摆放图",
+        "type": "partial",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "桌面等场景摆放",
+        "references": [
+          "garment",
+          "style"
+        ]
+      }
+    ],
+    "detail": [
+      {
+        "id": "detail-handle",
+        "name": "提手特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "提手缝线与承重结构",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-hardware",
+        "name": "五金件特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "五金扣件与光泽",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-fabric",
+        "name": "面料特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "皮革纹理或织物材质",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-lining",
+        "name": "内衬特写",
+        "type": "detail",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "内衬材质与内袋",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "model": [
+      {
+        "id": "model-handheld-front",
+        "name": "手持半身模特图",
+        "type": "model",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "模特手持包的半身正面",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ],
+        "platformUse": "主图第2张"
+      },
+      {
+        "id": "model-full-side",
+        "name": "侧身全身模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "侧身全身，展示携带状态",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      }
+    ]
+  },
+  "conditionalShots": [
+    {
+      "when": {
+        "attribute": "hasZip",
+        "equals": true
+      },
+      "add": [
+        {
+          "id": "detail-zipper",
+          "name": "拉链特写",
+          "type": "detail",
+          "required": true,
+          "priority": "P0",
+          "promptHints": "拉链齿与拉头做工",
+          "references": [
+            "garment"
+          ]
+        }
+      ]
+    },
+    {
+      "when": {
+        "attribute": "hasDetachableStrap",
+        "equals": true
+      },
+      "add": [
+        {
+          "id": "model-shoulder",
+          "name": "肩背展示模特图",
+          "type": "model",
+          "required": false,
+          "priority": "P1",
+          "promptHints": "装上肩带后的肩背效果",
+          "references": [
+            "garment",
+            "model-identity",
+            "style"
+          ]
+        }
+      ]
+    }
+  ],
+  "detailPageModules": [
+    {
+      "id": "module-scene",
+      "name": "场景搭配图",
+      "priority": "P1",
+      "generate": true,
+      "promptHints": "真实使用场景，展示佩戴或使用状态"
+    },
+    {
+      "id": "module-selling-points",
+      "name": "卖点图",
+      "priority": "P0",
+      "generate": true,
+      "promptHints": "围绕材质工艺卖点，预留文案排版空间"
+    },
+    {
+      "id": "module-spec-chart",
+      "name": "规格参数表",
+      "priority": "P0",
+      "generate": false,
+      "note": "尺寸重量材质参数，用设计模板输出，不走AI生图"
+    },
+    {
+      "id": "module-care",
+      "name": "保养说明",
+      "priority": "P2",
+      "generate": false,
+      "note": "固定设计模板"
+    }
+  ],
+  "platformPresets": {
+    "taobao": {
+      "mainImages": [
+        "flat-front",
+        "model-front-full",
+        "detail-hardware",
+        "module-scene",
+        "module-selling-points"
+      ],
+      "minSize": "800x800",
+      "recommendedSize": "1200x1200"
+    }
+  }
+}

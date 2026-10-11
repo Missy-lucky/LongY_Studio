@@ -1,0 +1,249 @@
+{
+  "schema": "longy.shot-template.v1",
+  "id": "wallet-shot-v1",
+  "category": "wallet",
+  "categoryName": "钱包",
+  "group": "包袋",
+  "version": "1.0.0",
+  "updatedAt": "2026-10-11",
+  "description": "钱包品类标准电商套图镜头清单。任务规划器按 shots 自动展开任务，按 conditionalShots 与商品属性自动加减镜头，导出前按模板做完整性校验。",
+  "attributes": [
+    {
+      "key": "hasCoinPocket",
+      "label": "零钱袋",
+      "type": "boolean",
+      "default": false
+    }
+  ],
+  "defaults": {
+    "tier": "draft",
+    "outputByType": {
+      "flat": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "partial": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      },
+      "detail": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "model": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      }
+    },
+    "referenceRoles": {
+      "garment": "商品原始图，结构与颜色的唯一权威来源",
+      "model-identity": "v2 定稿模特身份参考，锁定脸型与身形",
+      "style": "商业展示风格参考，只借构图与光线，不借人和衣服"
+    }
+  },
+  "shots": {
+    "flat": [
+      {
+        "id": "flat-closed",
+        "name": "闭合正面图",
+        "type": "flat",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "闭合状态正面完整展示",
+        "references": [
+          "garment"
+        ],
+        "platformUse": "主图第1张"
+      },
+      {
+        "id": "flat-open",
+        "name": "展开内外图",
+        "type": "flat",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "展开后内外结构分区完整展示",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "flat-side",
+        "name": "侧面厚度图",
+        "type": "flat",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "侧面展示厚度",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "partial": [
+      {
+        "id": "partial-held",
+        "name": "手持展示图",
+        "type": "partial",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "手持状态展示比例",
+        "references": [
+          "garment",
+          "style"
+        ]
+      }
+    ],
+    "detail": [
+      {
+        "id": "detail-leather",
+        "name": "外皮特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "皮革纹理与光泽",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-slots",
+        "name": "内格特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "卡位与钞位分区",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-zipper",
+        "name": "拉链特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "拉链齿与拉头",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-stitch",
+        "name": "车线特写",
+        "type": "detail",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "边线车缝工艺",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-hardware",
+        "name": "五金件特写",
+        "type": "detail",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "五金件光泽",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "model": [
+      {
+        "id": "model-hand-closeup",
+        "name": "手持特写模特图",
+        "type": "model",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "手持钱包的特写，展示比例",
+        "references": [
+          "garment",
+          "model-identity"
+        ],
+        "platformUse": "主图第2张"
+      },
+      {
+        "id": "model-half-front",
+        "name": "半身模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P2",
+        "promptHints": "半身使用场景",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      }
+    ]
+  },
+  "conditionalShots": [
+    {
+      "when": {
+        "attribute": "hasCoinPocket",
+        "equals": true
+      },
+      "add": [
+        {
+          "id": "detail-coin-pocket",
+          "name": "零钱袋特写",
+          "type": "detail",
+          "required": false,
+          "priority": "P1",
+          "promptHints": "零钱袋拉链与内衬",
+          "references": [
+            "garment"
+          ]
+        }
+      ]
+    }
+  ],
+  "detailPageModules": [
+    {
+      "id": "module-scene",
+      "name": "场景搭配图",
+      "priority": "P1",
+      "generate": true,
+      "promptHints": "真实使用场景，展示佩戴或使用状态"
+    },
+    {
+      "id": "module-selling-points",
+      "name": "卖点图",
+      "priority": "P0",
+      "generate": true,
+      "promptHints": "围绕材质工艺卖点，预留文案排版空间"
+    },
+    {
+      "id": "module-spec-chart",
+      "name": "规格参数表",
+      "priority": "P0",
+      "generate": false,
+      "note": "尺寸重量材质参数，用设计模板输出，不走AI生图"
+    },
+    {
+      "id": "module-care",
+      "name": "保养说明",
+      "priority": "P2",
+      "generate": false,
+      "note": "固定设计模板"
+    }
+  ],
+  "platformPresets": {
+    "taobao": {
+      "mainImages": [
+        "flat-closed",
+        "model-front-full",
+        "detail-leather",
+        "module-scene",
+        "module-selling-points"
+      ],
+      "minSize": "800x800",
+      "recommendedSize": "1200x1200"
+    }
+  }
+}
