@@ -11,6 +11,12 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Push-Location (Join-Path $root "frontend")
+npm run test:unit
+if ($LASTEXITCODE -ne 0) {
+  Pop-Location
+  exit $LASTEXITCODE
+}
+
 npm run build
 $code = $LASTEXITCODE
 Pop-Location

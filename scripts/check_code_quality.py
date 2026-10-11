@@ -15,6 +15,7 @@ WARNINGS: list[str] = []
 SNAKE_CASE = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*\.py$")
 KEBAB_CASE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.ts$")
 DTS_CASE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.d\.ts$")
+TEST_CASE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.test\.ts$")
 HOOK_CASE = re.compile(r"^use[A-Z][A-Za-z0-9]*\.ts$")
 PASCAL_CASE = re.compile(r"^[A-Z][A-Za-z0-9]*\.tsx$")
 SECRET = re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b")
@@ -71,6 +72,8 @@ def check_frontend() -> None:
         if path.parent.name == "hooks":
             if not HOOK_CASE.fullmatch(path.name):
                 error(f"Hook filename must be useXxx.ts: {relative}")
+        elif TEST_CASE.fullmatch(path.name):
+            pass
         elif not KEBAB_CASE.fullmatch(path.name) and not DTS_CASE.fullmatch(path.name):
             error(f"Non-component TypeScript filename must be kebab-case: {relative}")
     for path in source.rglob("*.tsx"):

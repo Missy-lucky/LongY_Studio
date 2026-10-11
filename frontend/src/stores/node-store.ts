@@ -6,6 +6,7 @@ import type {
 import { DEFAULT_INPUT_NODES, MODEL_STYLES, findCategory } from '../data/preset-categories'
 import { PROCESS_ORDER, PROCESS_TITLES } from '../data/process-templates'
 import { api, type ConsistencyQcReport, type ExportPreview, type ProviderInfo, type RemoteProject, type RemoteTask, type ShotPlanPreview, type ShotSelectionInput } from '../services/api'
+import { applyModelSelection } from '../workflow/model-selection'
 import { inputPosition, modelPosition, organizeNodes, outputPosition } from '../workflow/node-layout'
 import { applyProjectLayout, buildProjectLayout } from '../workflow/layout-persistence'
 import { buildRestoredProjectGraph } from '../workflow/project-restore'
@@ -701,15 +702,17 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
     if (!style) return
     globalThis.localStorage?.setItem('longy-selected-model', style.id)
     set(state => ({
-      nodes: state.nodes
-        .filter(node => node.type !== 'output')
-        .map(node => {
-          if (node.type !== 'processing') return node
-          const proc = node as FlowProcessingNode
-          return { ...node, data: { ...proc.data, status: 'idle', estimatedCount: 0, estimatedCost: 0, actualCost: 0 } }
-        }),
+      nodes: applyModelSelection(
+        state.nodes.filter(node => node.type !== 'output'),
+        style,
+      ).map(node => {
+        if (node.type !== 'processing') return node
+        const proc = node as FlowProcessingNode
+        return { ...node, data: { ...proc.data, status: 'idle', estimatedCount: 0, estimatedCost: 0, actualCost: 0 } }
+      }),
       edges: state.edges.filter(edge => edge.edgeType !== 'output'),
       modelPickerOpen: false,
+      layoutDirty: true,
       workflowMessage: `已选择 ${style.name}，请重新生成任务方案`,
     }))
   },
