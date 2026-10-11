@@ -25,7 +25,6 @@ def _cli_candidates() -> list[Path]:
     return [
         Path(configured) if configured else None,
         PROJECT_ROOT / "tools" / "openrouter_icu_image.py",
-        Path.home() / ".codex" / "skills" / "openrouter-icu-image" / "scripts" / "openrouter_icu_image.py",
     ]  # type: ignore[list-item]
 
 
