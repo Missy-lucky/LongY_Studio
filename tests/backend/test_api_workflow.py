@@ -130,7 +130,7 @@ def test_legacy_v2_template_flow(client: TestClient):
     }).json()
     single_tasks = client.get(f"/api/projects/{pid}/tasks").json()["tasks"]
     assert len(single_model["planned"]) > 0
-    assert [t["modelId"] for t in single_tasks if t["type"] == "model"] == ["chinese-grand"]
+    assert {t["modelId"] for t in single_tasks if t["type"] == "model"} == {"chinese-grand"}
 
     quality = client.get(f"/api/projects/{pid}/assets/{asset_id}/quality").json()["metrics"]
     assert quality["width"] == 1200 and quality["height"] == 1500

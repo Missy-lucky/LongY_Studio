@@ -1,14 +1,21 @@
-"""按品类规则拆解任务：确定性规则，不消耗大模型 token。"""
+"""按品类套图模板拆解任务：确定性规则，不消耗大模型 token。"""
 import hashlib
 import json
 import uuid
-from pathlib import Path
+
 from ..config import PROJECT_ROOT
 from ..database import get_db, utc_now
 from ..providers import resolve_provider
-from .prompt_builder import _templates, build_prompt
+from ..services.library_loader import SHOT_GROUPS, load_shot_templates
+from ..services.prompt_builder import _templates, build_prompt
 
 PRESET_ROOT = PROJECT_ROOT / "asset-library" / "generation-presets"
+SHOT_TYPE_NAMES = {
+    "flat": "平面图",
+    "detail": "细节图",
+    "partial": "局部图",
+    "model": "模特图",
+}
 
 
 def _load_preset(preset_id: str) -> dict:
@@ -18,17 +25,90 @@ def _load_preset(preset_id: str) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _cache_key(item_id: str, task_type: str, focus: str, tier: str, prompt: str, provider: str) -> str:
-    raw = "\n".join((item_id, task_type, focus, tier, prompt, provider))
+def _cache_key(
+    item_id: str,
+    task_type: str,
+    shot_id: str,
+    priority: str,
+    tier: str,
+    prompt: str,
+    provider: str,
+) -> str:
+    raw = "\n".join((item_id, task_type, shot_id, priority, tier, prompt, provider))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def plan_tasks(project_id: str, preset_id: str = "draft-first", provider_id: str = "mock", replace_existing: bool = False, model_ids: list[str] | None = None) -> dict:
+def _allowed_priorities(preset_id: str) -> set[str]:
+    if preset_id == "fast-check":
+        return {"P0"}
+    if preset_id == "draft-first":
+        return {"P0", "P1"}
+    return {"P0", "P1", "P2"}
+
+
+def _expand_template_shots(template: dict, attributes: dict[str, bool]) -> list[dict]:
+    """按固定镜头 + 条件镜头展开，保持模板文件中的分组顺序。"""
+    shots: list[dict] = []
+    for group in SHOT_GROUPS:
+        shots.extend(template["shots"][group])
+    for rule in template["conditionalShots"]:
+        condition = rule["when"]
+        if attributes.get(condition["attribute"]) == condition["equals"]:
+            shots.extend(rule["add"])
+    return shots
+
+
+def _legacy_shots(item, preset: dict) -> list[dict]:
+    """旧品类字段兜底；仅在该品类没有套图模板时使用。"""
+    shots: list[dict] = []
+    views = json.loads(item["required_views"])
+    if preset.get("flat") == "firstTwoViews":
+        views = views[:2]
+    shots.extend({
+        "id": f"legacy-flat-{index}",
+        "name": view,
+        "type": "flat",
+        "required": True,
+        "priority": "P0",
+        "promptHints": "",
+        "references": ["garment"],
+    } for index, view in enumerate(views))
+    shots.extend({
+        "id": f"legacy-detail-{index}",
+        "name": focus,
+        "type": "detail",
+        "required": True,
+        "priority": "P0",
+        "promptHints": "",
+        "references": ["garment"],
+    } for index, focus in enumerate(json.loads(item["default_detail_tasks"])[: int(preset["detailPerItem"])]))
+    shots.extend({
+        "id": f"legacy-partial-{index}",
+        "name": focus,
+        "type": "partial",
+        "required": True,
+        "priority": "P0",
+        "promptHints": "",
+        "references": ["garment"],
+    } for index, focus in enumerate(json.loads(item["default_partial_tasks"])[: int(preset["partialPerItem"])]))
+    return shots
+
+
+def plan_tasks(
+    project_id: str,
+    preset_id: str = "draft-first",
+    provider_id: str = "mock",
+    replace_existing: bool = False,
+    model_ids: list[str] | None = None,
+) -> dict:
     preset = _load_preset(preset_id)
     provider = resolve_provider(provider_id)
     legacy_negative = _templates()["negativePrompt"]
+    templates = load_shot_templates()
+    allowed_priorities = _allowed_priorities(preset_id)
     db = get_db()
     planned, cached, skipped = [], [], 0
+
     try:
         if replace_existing:
             db.execute(
@@ -51,68 +131,110 @@ def plan_tasks(project_id: str, preset_id: str = "draft-first", provider_id: str
             selected = set(model_ids)
             models = [model for model in models if model["id"] in selected]
 
-        def add(item, task_type, focus, model=None):
+        primary_item = next(
+            (item for item in items if item["is_sellable"]),
+            items[0] if items else None,
+        )
+
+        def add(item, shot: dict, model=None, output: dict | None = None):
             nonlocal max_code
             max_code += 1
+            task_type = shot["type"]
             prompt = build_prompt(
-                task_type, item["name"], item["category_name"], focus,
-                item["color_material"], item["selling_points"],
-                model["name"] if model else None, item["model_prompt_hints"],
+                task_type,
+                item["name"],
+                item["category_name"],
+                shot["name"],
+                item["color_material"],
+                item["selling_points"],
+                model["name"] if model else None,
+                item["model_prompt_hints"],
+                shot["promptHints"],
             )
-            key = _cache_key(item["id"], task_type, focus, preset["tier"], prompt, provider.id)
+            key = _cache_key(
+                item["id"], task_type, shot["id"], shot["priority"],
+                preset["tier"], prompt, provider.id,
+            )
             existing_cache = db.execute(
                 "SELECT file_path FROM cache_entries WHERE cache_key=?", (key,)
             ).fetchone()
             tid = uuid.uuid4().hex[:12]
-            type_name = {
-                "flat": "平面图", "detail": "细节图", "partial": "局部图", "model": "模特图"
-            }[task_type]
-            name = f"{item['name']} {focus} {type_name}"
+            name = f"{item['name']} {shot['name']}"
             category_negative = item["negative_hints"] or ""
             negative_prompt = " ".join(x for x in (category_negative, legacy_negative) if x)
             db.execute(
-                """INSERT INTO tasks(id,project_id,item_id,model_id,code,name,type,tier,status,provider,prompt,
-                   negative_prompt,cache_key,estimated_cost,cache_hit,created_at,updated_at)
-                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (tid, project_id, item["id"], model["id"] if model else None,
-                 f"T{max_code:03d}", name, task_type, preset["tier"],
-                 "cached" if existing_cache else "planned", provider.id, prompt,
-                 negative_prompt, key, 0 if existing_cache else provider.estimate(preset["tier"], 1),
-                 int(bool(existing_cache)), utc_now(), utc_now()),
+                """INSERT INTO tasks(
+                       id,project_id,item_id,model_id,code,name,type,tier,status,provider,prompt,
+                       negative_prompt,cache_key,estimated_cost,cache_hit,shot_id,shot_name,priority,
+                       created_at,updated_at
+                   ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    tid, project_id, item["id"], model["id"] if model else None,
+                    f"T{max_code:03d}", name, task_type, preset["tier"],
+                    "cached" if existing_cache else "planned", provider.id, prompt,
+                    negative_prompt, key, 0 if existing_cache else provider.estimate(preset["tier"], 1),
+                    int(bool(existing_cache)), shot["id"], shot["name"], shot["priority"],
+                    utc_now(), utc_now(),
+                ),
             )
             (cached if existing_cache else planned).append(
-                {"id": tid, "name": name, "cacheHit": bool(existing_cache)}
+                {"id": tid, "name": name, "shotId": shot["id"], "cacheHit": bool(existing_cache)}
             )
 
         for item in items:
-            views = json.loads(item["required_views"])
-            if preset.get("flat") == "firstTwoViews":
-                views = views[:2]
-            for view in views:
-                add(item, "flat", view)
-            for focus in json.loads(item["default_detail_tasks"])[: int(preset["detailPerItem"])]:
-                add(item, "detail", focus)
-            for focus in json.loads(item["default_partial_tasks"])[: int(preset["partialPerItem"])]:
-                add(item, "partial", focus)
+            template = templates.get(item["category_id"])
+            if not template:
+                for shot in _legacy_shots(item, preset):
+                    add(item, shot)
+                continue
 
-        # 模特图是整套搭配的任务；用首个可售单品代表 project 级组合。
-        primary_item = next((item for item in items if item["is_sellable"]), items[0] if items else None)
-        if primary_item:
+            attributes = json.loads(item["attributes_json"] or "{}")
+            expanded = _expand_template_shots(template, attributes)
+            visible = [shot for shot in expanded if shot["priority"] in allowed_priorities]
+            skipped += len(expanded) - len(visible)
+            output_by_type = template["defaults"]["outputByType"]
+
+            for shot in visible:
+                if shot["type"] == "model":
+                    continue
+                add(item, shot, output=output_by_type[shot["type"]])
+
+            # 旧路径按“模特 × 角度”展开；模板路径按镜头展开，并轮换使用已选模特身份。
+            if item["id"] == (primary_item["id"] if primary_item else None):
+                model_shots = [shot for shot in visible if shot["type"] == "model"]
+                if model_shots:
+                    for index, shot in enumerate(model_shots):
+                        model = models[index % len(models)] if models else None
+                        add(item, shot, model, output_by_type["model"])
+
+        # 模板缺失时的旧版模特兜底逻辑。
+        if primary_item and primary_item["category_id"] not in templates:
             for model in models:
                 for angle in preset["modelAngles"]:
-                    add(primary_item, "model", angle, model)
+                    add(primary_item, {
+                        "id": f"legacy-model-{model['id']}-{angle}",
+                        "name": angle,
+                        "type": "model",
+                        "required": True,
+                        "priority": "P0",
+                        "promptHints": "",
+                        "references": ["garment", "model-identity", "style"],
+                    }, model)
 
         db.execute(
             "INSERT INTO events(time,project_id,type,message) VALUES(?,?,?,?)",
-            (utc_now(), project_id, "task.plan",
-             f"任务规划完成：新增 {len(planned)+len(cached)}，缓存命中 {len(cached)}，跳过 {skipped}"),
+            (
+                utc_now(), project_id, "task.plan",
+                f"任务规划完成：新增 {len(planned)+len(cached)}，缓存命中 {len(cached)}，按预设跳过 {skipped}",
+            ),
         )
         db.commit()
         return {
-            "planned": planned, "cached": cached, "skipped": skipped,
-            "presetId": preset["id"], "provider": provider.id,
+            "planned": planned,
+            "cached": cached,
+            "skipped": skipped,
+            "presetId": preset["id"],
+            "provider": provider.id,
         }
     finally:
         db.close()
-
-

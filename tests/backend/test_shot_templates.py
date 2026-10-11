@@ -66,3 +66,38 @@ def test_item_attributes_are_validated_and_persisted():
         template = client.get("/api/library/shot-templates/hoodie")
         assert template.status_code == 200
         assert template.json()["template"]["attributes"][0]["key"] == "hasHood"
+
+def test_hoodie_shot_template_expands_conditional_tasks_and_presets():
+    with TestClient(app) as client:
+        project = client.post("/api/projects", json={
+            "sku": "SHOT-001", "name": "套图规划测试", "platform": "taobao",
+            "style": "简约", "budget": 10,
+        }).json()
+        client.post(f"/api/projects/{project['id']}/items", json={
+            "name": "卫衣", "categoryId": "hoodie",
+            "attributes": {"hasHood": True, "hasZip": False},
+        })
+        planned = client.post(f"/api/projects/{project['id']}/tasks/plan", json={
+            "presetId": "draft-first", "provider": "mock", "replaceExisting": True,
+            "modelIds": ["chinese-grand"],
+        }).json()
+        assert len(planned["planned"]) == 16  # P0+P1：模板 P2 被预设裁剪
+        tasks = client.get(f"/api/projects/{project['id']}/tasks").json()["tasks"]
+        shot_ids = {task["shotId"] for task in tasks}
+        assert {"detail-hood", "detail-drawstring"} <= shot_ids
+        assert "detail-zipper" not in shot_ids
+        assert all(task["priority"] in {"P0", "P1"} for task in tasks)
+        assert all(task["provider"] == "mock" for task in tasks)
+        hood = next(task for task in tasks if task["shotId"] == "detail-hood")
+        assert hood["shotName"] == "帽型特写"
+        assert "Shot rules: 帽体立起" in hood["prompt"]
+
+        fast = client.post(f"/api/projects/{project['id']}/tasks/plan", json={
+            "presetId": "fast-check", "provider": "mock", "replaceExisting": True,
+            "modelIds": ["chinese-grand"],
+        }).json()
+        assert len(fast["planned"]) == 10
+        tasks = client.get(f"/api/projects/{project['id']}/tasks").json()["tasks"]
+        assert tasks
+        assert all(task["priority"] == "P0" for task in tasks)
+        assert "detail-drawstring" not in {task["shotId"] for task in tasks}
