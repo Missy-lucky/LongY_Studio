@@ -101,3 +101,17 @@ def test_hoodie_shot_template_expands_conditional_tasks_and_presets():
         assert tasks
         assert all(task["priority"] == "P0" for task in tasks)
         assert "detail-drawstring" not in {task["shotId"] for task in tasks}
+
+
+def test_prompt_builder_combines_legacy_category_and_shot_rules():
+    from backend.app.services.prompt_builder import build_prompt
+
+    prompt = build_prompt(
+        "flat", "测试卫衣", "卫衣", "正面平铺图",
+        color_material="黑色 / 毛圈布", selling_points="重磅面料",
+        model_hint="保留袋鼠口袋", shot_hint="双袖对称展开",
+    )
+    assert "Image 1 is the authoritative original clothing" in prompt
+    assert "Category display rules: 保留袋鼠口袋" in prompt
+    assert "Shot rules: 双袖对称展开" in prompt
+    assert "Color / material record: 黑色 / 毛圈布" in prompt
