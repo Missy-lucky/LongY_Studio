@@ -19,6 +19,8 @@ def test_template_schema_requires_complete_fields():
     template = {"schema": "longy.shot-template.v1", "category": "test", "attributes": []}
     with pytest.raises(ValueError, match="缺少字段"):
         validate_shot_template(template, "test.json")
+
+
 from pathlib import Path
 
 from backend.app.database import get_db, init_db
@@ -34,3 +36,33 @@ def test_shot_template_migration_adds_item_and_task_fields():
         assert {"shot_id", "shot_name", "priority"} <= task_columns
     finally:
         db.close()
+
+
+from fastapi.testclient import TestClient
+
+from backend.app.main import app
+
+
+def test_item_attributes_are_validated_and_persisted():
+    with TestClient(app) as client:
+        project = client.post("/api/projects", json={
+            "sku": "ATTR-001", "name": "属性录入测试", "platform": "taobao",
+            "style": "简约", "budget": 10,
+        }).json()
+        item = client.post(f"/api/projects/{project['id']}/items", json={
+            "name": "连帽卫衣", "categoryId": "hoodie",
+            "attributes": {"hasHood": True, "hasZip": False},
+            "colorMaterial": "深灰 / 毛圈布", "sellingPoints": "重磅",
+        })
+        assert item.status_code == 200
+        assert item.json()["attributes"] == {"hasHood": True, "hasZip": False}
+
+        invalid = client.post(f"/api/projects/{project['id']}/items", json={
+            "name": "非法属性", "categoryId": "hoodie", "attributes": {"hasZipper": True},
+        })
+        assert invalid.status_code == 400
+        assert "非法商品属性" in invalid.json()["detail"]
+
+        template = client.get("/api/library/shot-templates/hoodie")
+        assert template.status_code == 200
+        assert template.json()["template"]["attributes"][0]["key"] == "hasHood"

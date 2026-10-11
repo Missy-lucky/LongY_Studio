@@ -43,6 +43,7 @@ export interface NodeStoreState {
   edges: FlowEdge[]
   selectedNodeId: string | null
   typePickerOpen: boolean
+  changeTypeTargetNodeId: string | null
   modelPickerOpen: boolean
   versionCounter: number
   canvasInitialized: boolean
@@ -76,6 +77,9 @@ export interface NodeStoreState {
   removeNode: (nodeId: string) => void
   uploadImage: (nodeId: string, image: UploadedImage, file?: File) => void
   changeNodeType: (nodeId: string, categoryId: string) => void
+  loadInputAttributes: (nodeId: string) => Promise<void>
+  setInputAttribute: (nodeId: string, attributeKey: string, checked: boolean) => void
+  setChangeTypeTargetNodeId: (nodeId: string | null) => void
   setModelStyle: (styleId: string) => void
   generatePlan: () => Promise<void>
   startGeneration: () => Promise<void>
@@ -166,6 +170,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
   edges: [],
   selectedNodeId: null,
   typePickerOpen: false,
+  changeTypeTargetNodeId: null,
   modelPickerOpen: false,
   versionCounter: 0,
   canvasInitialized: false,
@@ -195,6 +200,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
         collapsed: false,
         data: {
           categoryId: cat.id, categoryName: cat.name, categoryGroup: cat.group,
+          attributeOptions: [], attributes: {},
           image: null, status: 'empty' as const,
         },
       }
@@ -375,13 +381,15 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
       collapsed: false,
       data: {
         categoryId: cat.id, categoryName: cat.name, categoryGroup: cat.group,
+        attributeOptions: [], attributes: {},
         image: null, status: 'empty',
       },
     }
     const newEdges = get().nodes
       .filter(n => n.type === 'processing')
       .map(proc => ({ id: nid('edge'), source: newNode.id, target: proc.id, edgeType: 'material' as const }))
-    set(state => ({ nodes: [...state.nodes, newNode], edges: [...state.edges, ...newEdges], typePickerOpen: false }))
+    set(state => ({ nodes: [...state.nodes, newNode], edges: [...state.edges, ...newEdges], typePickerOpen: false, changeTypeTargetNodeId: null }))
+    void get().loadInputAttributes(newNode.id)
   },
 
   removeNode: nodeId => {
@@ -390,6 +398,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
     set(state => ({
       nodes: state.nodes.filter(node => node.id !== nodeId),
       edges: state.edges.filter(edge => edge.source !== nodeId && edge.target !== nodeId),
+      changeTypeTargetNodeId: get().changeTypeTargetNodeId === nodeId ? null : get().changeTypeTargetNodeId,
     }))
   },
 
@@ -412,9 +421,11 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
         const category = get().nodes
           .find(node => node.id === nodeId) as FlowInputNode | undefined
         const categoryId = category?.data.categoryId || 'top'
+        const attributes = category?.data.attributes ?? {}
         const item = await api.createItem(projectId, {
           name: file.name.replace(/\.[^.]+$/, ''),
           categoryId,
+          attributes,
           colorMaterial: '以原图为准',
           sellingPoints: '结构、比例、颜色和细节严格保留',
           isSellable: true,
@@ -469,13 +480,64 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
           data: {
             ...input.data,
             categoryId: cat.id, categoryName: cat.name, categoryGroup: cat.group,
+            attributeOptions: [], attributes: {},
             image: input.data.image ? { ...input.data.image, remote: undefined } : input.data.image,
           },
         }
       }),
       typePickerOpen: false,
+      changeTypeTargetNodeId: null,
     }))
+    void get().loadInputAttributes(nodeId)
   },
+
+  loadInputAttributes: async nodeId => {
+    const node = get().nodes.find(item => item.id === nodeId)
+    if (node?.type !== 'input') return
+    const categoryId = (node as FlowInputNode).data.categoryId
+    try {
+      const { template } = await api.getShotTemplate(categoryId)
+      const current = get().nodes.find(item => item.id === nodeId)
+      if (current?.type !== 'input' || (current as FlowInputNode).data.categoryId !== categoryId) return
+      const attributes = Object.fromEntries(
+        template.attributes.map(attribute => [attribute.key, attribute.default]),
+      )
+      set(state => ({
+        nodes: state.nodes.map(item => item.type === 'input' && item.id === nodeId
+          ? {
+              ...item,
+              data: {
+                ...(item as FlowInputNode).data,
+                attributeOptions: template.attributes,
+                attributes,
+              },
+            }
+          : item),
+      }))
+    } catch (error) {
+      set({ workflowMessage: error instanceof Error ? error.message : '套图模板读取失败' })
+    }
+  },
+
+  setInputAttribute: (nodeId, attributeKey, checked) => set(state => ({
+    nodes: state.nodes.map(node => node.type === 'input' && node.id === nodeId
+      ? {
+          ...node,
+          data: {
+            ...(node as FlowInputNode).data,
+            attributes: {
+              ...(node as FlowInputNode).data.attributes,
+              [attributeKey]: checked,
+            },
+          },
+        }
+      : node),
+  })),
+
+  setChangeTypeTargetNodeId: nodeId => set({
+    changeTypeTargetNodeId: nodeId,
+    typePickerOpen: nodeId !== null,
+  }),
 
   setModelStyle: styleId => {
     const style = MODEL_STYLES.find(item => item.id === styleId)

@@ -1,3 +1,5 @@
+import type { ShotTemplate } from '../types/domain'
+
 const API_ROOT = '/api'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -26,7 +28,10 @@ export interface RemoteProject {
   createdAt?: string
   updatedAt?: string
 }
-export interface RemoteItem { id: string }
+export interface RemoteItem {
+  id: string
+  attributes?: Record<string, boolean>
+}
 export interface RemoteAsset {
   id: string
   name: string
@@ -84,8 +89,12 @@ export const api = {
     }),
   createProject: (payload: { sku: string; name: string; platform: string; style: string; budget: number }) =>
     request<RemoteProject>('/projects', { method: 'POST', body: JSON.stringify(payload) }),
-  createItem: (projectId: string, payload: { name: string; categoryId: string; colorMaterial: string; sellingPoints: string; isSellable: boolean }) =>
-    request<RemoteItem>(`/projects/${projectId}/items`, { method: 'POST', body: JSON.stringify(payload) }),
+  getShotTemplate: (categoryId: string) =>
+    request<{ template: ShotTemplate }>(`/library/shot-templates/${categoryId}`),
+  createItem: (
+    projectId: string,
+    payload: { name: string; categoryId: string; attributes: Record<string, boolean>; colorMaterial: string; sellingPoints: string; isSellable: boolean },
+  ) => request<RemoteItem>(`/projects/${projectId}/items`, { method: 'POST', body: JSON.stringify(payload) }),
   listAssets: (projectId: string) =>
     request<{ assets: RemoteAsset[] }>(`/projects/${projectId}/assets`),
   importAsset: async (projectId: string, file: File) => {

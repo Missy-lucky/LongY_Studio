@@ -49,6 +49,8 @@ export function buildRestoredProjectGraph({
         categoryId: category.id,
         categoryName: category.name,
         categoryGroup: category.group,
+        attributeOptions: [],
+        attributes: {},
         status: 'confirmed' as const,
         image: {
           id: asset.id,
@@ -74,6 +76,8 @@ export function buildRestoredProjectGraph({
         categoryId: category.id,
         categoryName: category.name,
         categoryGroup: category.group,
+        attributeOptions: [],
+        attributes: {},
         image: null,
         status: 'empty' as const,
       },

@@ -157,3 +157,42 @@ export interface ExportFileNode {
   conflict: boolean
 }
 
+export type ShotGroup = TaskType
+export type ShotPriority = 'P0' | 'P1' | 'P2'
+export type ShotReferenceRole = 'garment' | 'model-identity' | 'style'
+
+export interface CategoryAttribute {
+  key: string
+  label: string
+  type: 'boolean'
+  default: boolean
+}
+
+export interface Shot {
+  id: string
+  name: string
+  type: ShotGroup
+  required: boolean
+  priority: ShotPriority
+  promptHints: string
+  references: ShotReferenceRole[]
+  platformUse?: string
+}
+
+export interface ShotTemplate {
+  schema: 'longy.shot-template.v1'
+  id: string
+  category: string
+  categoryName: string
+  version: string
+  attributes: CategoryAttribute[]
+  shots: Record<ShotGroup, Shot[]>
+  conditionalShots: Array<{
+    when: { attribute: string; equals: boolean }
+    add: Shot[]
+  }>
+  defaults: {
+    tier: TaskTier
+    outputByType: Record<ShotGroup, { width: number; height: number; background: string }>
+  }
+}

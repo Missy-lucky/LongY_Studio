@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Plus, Search } from 'lucide-react'
 import { useNodeStore } from '../../stores/node-store'
 import { CATEGORIES_BY_GROUP, MODEL_STYLES } from '../../data/preset-categories'
@@ -7,16 +7,20 @@ export function TypePicker() {
   const open = useNodeStore(s => s.typePickerOpen)
   const setOpen = useNodeStore(s => s.setTypePickerOpen)
   const addInputNode = useNodeStore(s => s.addInputNode)
+  const changeNodeType = useNodeStore(s => s.changeNodeType)
+  const changeTypeTargetNodeId = useNodeStore(s => s.changeTypeTargetNodeId)
+  const setChangeTypeTargetNodeId = useNodeStore(s => s.setChangeTypeTargetNodeId)
+  const closePicker = useCallback(() => setChangeTypeTargetNodeId(null), [setChangeTypeTargetNodeId])
   const [query, setQuery] = useState('')
 
   useEffect(() => {
     if (!open) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false)
+      if (event.key === 'Escape') closePicker()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, setOpen])
+  }, [open, closePicker])
 
   if (!open) return null
 
@@ -28,7 +32,7 @@ export function TypePicker() {
   return (
     <div className="fixed inset-0 z-[200] flex items-end justify-center pb-8"
       style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)' }}
-      onMouseDown={() => setOpen(false)}>
+      onMouseDown={() => closePicker()}>
       <div className="anim-up w-[480px] overflow-hidden rounded-2xl border"
         style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-lg)' }}
         onMouseDown={e => e.stopPropagation()}>
@@ -37,7 +41,7 @@ export function TypePicker() {
           <input value={query} onChange={e => setQuery(e.target.value)}
             placeholder="搜索穿搭部位类型..."
             className="flex-1 bg-transparent text-sm outline-none" style={{ color: 'var(--text)' }}/>
-          <button onClick={() => setOpen(false)} className="kbd !min-h-[28px] !min-w-[40px] cursor-pointer transition-colors hover:bg-[var(--surface-hover)]" title="关闭 (Esc)">Esc</button>
+          <button onClick={() => closePicker()} className="kbd !min-h-[28px] !min-w-[40px] cursor-pointer transition-colors hover:bg-[var(--surface-hover)]" title="关闭 (Esc)">Esc</button>
         </div>
         <div className="max-h-[400px] overflow-y-auto p-3">
           {filtered.map(([group, items]) => (
@@ -48,7 +52,11 @@ export function TypePicker() {
               <div className="flex flex-wrap gap-1.5">
                 {items.map(c => (
                   <button key={c.id}
-                    onClick={() => { addInputNode(c.id); setQuery('') }}
+                    onClick={() => {
+                      if (changeTypeTargetNodeId) changeNodeType(changeTypeTargetNodeId, c.id)
+                      else addInputNode(c.id)
+                      setQuery('')
+                    }}
                     className="btn btn-secondary !min-h-[34px] !rounded-lg !text-xs">
                     <Plus size={11} strokeWidth={1.5}/>{c.name}
                   </button>

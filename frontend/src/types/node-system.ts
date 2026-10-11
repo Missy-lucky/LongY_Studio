@@ -1,3 +1,5 @@
+import type { CategoryAttribute } from '../../../shared/types/domain'
+
 /** 节点系统类型定义 —— 与设计文档一致 */
 
 // ============ 节点基础 ============
@@ -15,6 +17,8 @@ export interface InputNodeData {
   categoryId: string
   categoryName: string
   categoryGroup: string
+  attributeOptions: CategoryAttribute[]
+  attributes: Record<string, boolean>
   image: UploadedImage | null
   status: 'empty' | 'uploaded' | 'confirmed' | 'error'
 }

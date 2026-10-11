@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from ..config import PROJECT_ROOT
 from ..database import get_db
 from ..services.prompt_builder import legacy_prompts
+from ..services.library_loader import load_shot_templates
 from ..utils.case import camelize
 
 router = APIRouter()
@@ -97,3 +98,11 @@ def prompt_templates() -> dict:
     data = json.loads(path.read_text(encoding="utf-8"))
     data.update(legacy_prompts())
     return {"templates": camelize(data)}
+
+
+@router.get("/shot-templates/{category_id}")
+def shot_template(category_id: str) -> dict:
+    template = load_shot_templates().get(category_id)
+    if not template:
+        raise HTTPException(404, "品类套图模板不存在")
+    return {"template": template}

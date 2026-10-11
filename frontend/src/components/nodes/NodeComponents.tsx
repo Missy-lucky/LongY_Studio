@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { Check, Image as ImageIcon, Lock, Maximize2, RefreshCw, Sparkles, Trash2, Upload, X } from 'lucide-react'
 import clsx from 'clsx'
@@ -11,8 +12,15 @@ const portStyle = '!w-2 !h-2 !border-none !bg-[var(--text-3)]'
 export function InputNodeComponent({ data, id }: { data: FlowInputNode['data']; id: string }) {
   const uploadImage = useNodeStore(s => s.uploadImage)
   const removeNode = useNodeStore(s => s.removeNode)
-  const setTypePickerOpen = useNodeStore(s => s.setTypePickerOpen)
+  const setChangeTypeTargetNodeId = useNodeStore(s => s.setChangeTypeTargetNodeId)
+  const loadInputAttributes = useNodeStore(s => s.loadInputAttributes)
+  const setInputAttribute = useNodeStore(s => s.setInputAttribute)
   const openImageViewer = useNodeStore(s => s.openImageViewer)
+
+  useEffect(
+    () => { void loadInputAttributes(id) },
+    [id, data.categoryId, loadInputAttributes],
+  )
 
   const handleUpload = () => {
     const input = document.createElement('input')
@@ -46,7 +54,7 @@ export function InputNodeComponent({ data, id }: { data: FlowInputNode['data']; 
 
       {/* 头部 */}
       <div className="flex items-center justify-between px-3 pt-2.5 pb-1">
-        <button onClick={() => setTypePickerOpen(true)}
+        <button onClick={() => setChangeTypeTargetNodeId(id)}
           className="flex !min-h-[36px] !min-w-[36px] items-center gap-1.5 rounded-md px-1 text-xs font-medium transition-colors hover:bg-[var(--surface-hover)]"
           style={{ color: 'var(--primary)' }}>
           {data.categoryName}
@@ -121,6 +129,33 @@ export function InputNodeComponent({ data, id }: { data: FlowInputNode['data']; 
           </div>
         )}
       </div>
+
+      {data.attributeOptions.length > 0 && (
+        <div className="mx-2.5 mb-2.5 rounded-lg border p-2" style={{ borderColor: 'var(--border)' }}>
+          <div className="mb-1 text-[9px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-3)' }}>
+            商品属性
+          </div>
+          <div className="max-h-[92px] space-y-1 overflow-y-auto pr-1">
+            {data.attributeOptions.map(attribute => (
+              <label
+                key={attribute.key}
+                className={`flex items-center gap-1.5 text-[10px] ${data.image?.remote ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                style={{ color: 'var(--text-2)' }}
+                onMouseDown={event => event.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  checked={Boolean(data.attributes[attribute.key])}
+                  onChange={event => setInputAttribute(id, attribute.key, event.target.checked)}
+                  disabled={Boolean(data.image?.remote)}
+                  className="h-3 w-3 accent-[var(--primary)]"
+                />
+                <span className="truncate" title={attribute.label}>{attribute.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
