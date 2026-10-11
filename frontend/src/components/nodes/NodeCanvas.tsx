@@ -8,7 +8,7 @@ import { TypePicker, ModelPicker } from './TypePicker'
 import { NodeImageViewer } from './ImageViewer'
 import { VersionQcDialog } from './VersionQcDialog'
 import { ExportPreviewCoverageDialog, ExportResultDialog, ProjectSettingsDialog, ProviderConfirmDialog } from './WorkflowDialogs'
-import { EDGE_COLORS } from '../../types/node-system'
+import { EDGE_COLORS, type ProcessType } from '../../types/node-system'
 
 const nodeTypes: NodeTypes = {
   inputNode: InputNodeComponent as any,
@@ -25,6 +25,8 @@ export function NodeCanvas() {
   const setSelected = useNodeStore(s => s.setSelected)
   const generatePlan = useNodeStore(s => s.generatePlan)
   const startGeneration = useNodeStore(s => s.startGeneration)
+  const generationTypes = useNodeStore(s => s.generationTypes)
+  const toggleGenerationType = useNodeStore(s => s.toggleGenerationType)
   const workflowBusy = useNodeStore(s => s.workflowBusy)
   const workflowMessage = useNodeStore(s => s.workflowMessage)
   const restoreLastProject = useNodeStore(s => s.restoreLastProject)
@@ -106,7 +108,23 @@ export function NodeCanvas() {
         <button onClick={() => void generatePlan()} disabled={workflowBusy} className="btn btn-secondary !min-h-[36px] !rounded-xl" title="按当前素材和模特生成后端任务">
           <Layers size={14} strokeWidth={1.5}/>生成方案
         </button>
-        <button onClick={() => void startGeneration()} disabled={workflowBusy} className="btn btn-primary !min-h-[36px] !rounded-xl" title="提交队列并轮询结果；真实 Provider 会先确认">
+        <div className="rounded-xl border p-2" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+          <div className="mb-1.5 text-[10px] font-semibold text-text-muted">生图范围</div>
+          <div className="grid grid-cols-2 gap-1">
+            {(['flat', 'partial', 'detail', 'model'] as const).map((type: ProcessType) => (
+              <label key={type} className="flex cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-1 text-[10px] transition-colors hover:bg-[var(--surface-hover)]">
+                <input
+                  type="checkbox"
+                  checked={generationTypes.includes(type)}
+                  onChange={() => toggleGenerationType(type)}
+                  className="h-3 w-3 accent-[var(--primary)]"
+                />
+                {{ flat: '平面', partial: '局部', detail: '细节', model: '模特' }[type]}
+              </label>
+            ))}
+          </div>
+        </div>
+        <button onClick={() => void startGeneration()} disabled={workflowBusy} className="btn btn-primary !min-h-[36px] !rounded-xl" title="只提交当前勾选范围内的待生成任务；真实 Provider 会先确认">
           {workflowBusy ? <Loader2 size={14} className="anim-spin"/> : <Play size={14} strokeWidth={1.5}/>}开始流程
         </button>
         <button onClick={organizeLayout} className="btn btn-secondary !min-h-[36px] !rounded-xl" title="自动整理节点布局">

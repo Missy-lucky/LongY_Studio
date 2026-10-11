@@ -66,6 +66,7 @@ export interface NodeStoreState {
   fitViewCounter: number
   providerId: ProviderInfo['id']
   providers: ProviderInfo[]
+  generationTypes: ProcessType[]
   workflowBusy: boolean
   workflowMessage: string
   restoreAttempted: boolean
@@ -87,6 +88,9 @@ export interface NodeStoreState {
   requestFitView: () => void
   saveProjectMeta: (payload: Partial<RemoteProject>) => Promise<void>
   refreshProviders: () => Promise<void>
+  setGenerationTypes: (types: ProcessType[]) => void
+  toggleGenerationType: (type: ProcessType) => void
+  setShotPlanTypes: (types: ProcessType[]) => void
   addInputNode: (categoryId: string) => void
   removeNode: (nodeId: string) => void
   uploadImage: (nodeId: string, image: UploadedImage, file?: File) => void
@@ -187,9 +191,10 @@ async function pollTasks(runId: number): Promise<void> {
     try {
       const { tasks } = await api.listTasks(projectId)
       applyTasks(tasks)
-      if (!tasks.some(task => activeBackendStatus(task.status))) {
-        const review = tasks.filter(task => task.status === 'review').length
-        const failed = tasks.filter(task => task.status === 'failed').length
+      const scopedTasks = tasks.filter(task => useNodeStore.getState().generationTypes.includes(task.type))
+      if (!scopedTasks.some(task => activeBackendStatus(task.status))) {
+        const review = scopedTasks.filter(task => task.status === 'review').length
+        const failed = scopedTasks.filter(task => task.status === 'failed').length
         useNodeStore.setState({
           workflowBusy: false,
           workflowMessage: `批次完成：${review} 个待审核，${failed} 个失败`,
@@ -224,6 +229,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
   fitViewCounter: 0,
   providerId: 'mock',
   providers: [],
+  generationTypes: ['flat', 'partial', 'detail', 'model'],
   workflowBusy: false,
   workflowMessage: '',
   restoreAttempted: false,
@@ -404,6 +410,17 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
       set({ workflowBusy: false })
     }
   },
+
+  setGenerationTypes: types => set({
+    generationTypes: types.length ? types : ['flat', 'partial', 'detail', 'model'],
+  }),
+
+  toggleGenerationType: type => set(state => {
+    const active = state.generationTypes.includes(type)
+      ? state.generationTypes.filter(item => item !== type)
+      : [...state.generationTypes, type]
+    return { generationTypes: active }
+  }),
 
   refreshProviders: async () => {
     try {
@@ -724,6 +741,44 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
 
   closeShotPlan: () => set({ shotPlan: null }),
 
+  setShotPlanTypes: types => set(state => {
+    if (!state.shotPlan) return {}
+    const allowed = new Set(types)
+    const items = state.shotPlan.items.map(item => {
+      const selectedCostByType = new Map(item.shots
+        .filter(shot => shot.status === 'selected' && shot.estimatedCost > 0)
+        .map(shot => [shot.type, shot.estimatedCost]))
+      const fallbackCost = item.shots.find(shot => shot.status === 'selected')?.estimatedCost ?? 0
+      const shots = item.shots.map(shot => {
+        const selected = allowed.has(shot.type) && shot.priority === 'P0'
+        return {
+          ...shot,
+          status: selected ? 'selected' as const : 'proposed' as const,
+          source: selected ? 'ai' as const : 'manual' as const,
+          assetId: null,
+          reason: '',
+          estimatedCost: selected
+            ? selectedCostByType.get(shot.type) ?? fallbackCost
+            : 0,
+        }
+      })
+      return {
+        ...item,
+        shots,
+        selectedCount: shots.filter(shot => shot.status === 'selected').length,
+        estimatedCost: shots.reduce((sum, shot) => sum + shot.estimatedCost, 0),
+      }
+    })
+    return {
+      shotPlan: {
+        ...state.shotPlan,
+        items,
+        selectedCount: items.reduce((sum, item) => sum + item.selectedCount, 0),
+        estimatedCost: items.reduce((sum, item) => sum + item.estimatedCost, 0),
+      },
+    }
+  }),
+
   updateShotPlanSelection: (itemId, shotId, patch) => set(state => {
     if (!state.shotPlan) return {}
     const items = state.shotPlan.items.map(item => {
@@ -803,6 +858,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
     }
     const taskIds = outputs
       .filter(output => ['queued', 'failed'].includes(output.status))
+      .filter(output => get().generationTypes.includes(output.imageType))
       .map(output => output.taskId)
     if (!taskIds.length) {
       set({ workflowMessage: '没有待生成任务；请先生成方案或重生成失败任务' })

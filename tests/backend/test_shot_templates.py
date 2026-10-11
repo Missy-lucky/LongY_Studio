@@ -335,3 +335,26 @@ def test_fulfilled_original_asset_is_exported():
         assert exported["exported"] == 1
         assert exported["mapping"][0]["assetId"] == asset["id"]
         assert Path(exported["mapping"][0]["written"]).is_file()
+
+def test_single_flat_shot_plan_can_be_generated():
+    import uuid
+
+    with TestClient(app) as client:
+        suffix = uuid.uuid4().hex[:6]
+        project = client.post("/api/projects", json={
+            "sku": f"ONE-FLAT-{suffix}", "name": "单张平面图测试", "platform": "taobao",
+            "style": "简约", "budget": 10,
+        }).json()
+        pid = project["id"]
+        client.post(f"/api/projects/{pid}/items", json={
+            "name": "卫衣", "categoryId": "hoodie", "attributes": {"hasHood": True, "hasZip": False},
+        })
+        planned = client.post(f"/api/projects/{pid}/tasks/plan", json={
+            "presetId": "draft-first", "provider": "mock", "replaceExisting": True,
+            "modelIds": ["chinese-grand"], "shotIds": ["flat-front"],
+        }).json()
+        assert len(planned["planned"]) == 1
+        tasks = client.get(f"/api/projects/{pid}/tasks").json()["tasks"]
+        assert len(tasks) == 1
+        assert tasks[0]["shotId"] == "flat-front"
+        assert tasks[0]["type"] == "flat"

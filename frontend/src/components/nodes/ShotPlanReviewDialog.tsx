@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Ban, Check, Image as ImageIcon, ListChecks, Plus, Sparkles, X } from 'lucide-react'
+import { Ban, Check, CircleSlash, Image as ImageIcon, ListChecks, Plus, X } from 'lucide-react'
 import { useNodeStore } from '../../stores/node-store'
 import type { ShotPlanPreview, ShotPlanShot } from '../../services/api'
 
@@ -27,11 +27,14 @@ const EMPTY_CUSTOM: CustomShotForm = {
   name: '', type: 'detail', priority: 'P1', promptHints: '',
 }
 
+const ALL_TYPES = ['flat', 'partial', 'detail', 'model'] as const
+
 export function ShotPlanReviewDialog() {
   const plan = useNodeStore(state => state.shotPlan)
   const close = useNodeStore(state => state.closeShotPlan)
   const confirm = useNodeStore(state => state.confirmShotPlan)
   const updateSelection = useNodeStore(state => state.updateShotPlanSelection)
+  const setShotPlanTypes = useNodeStore(state => state.setShotPlanTypes)
   const addCustomShot = useNodeStore(state => state.addCustomShot)
   const busy = useNodeStore(state => state.workflowBusy)
   const [customItemId, setCustomItemId] = useState<string | null>(null)
@@ -79,7 +82,7 @@ export function ShotPlanReviewDialog() {
           <div className="min-w-0 flex-1">
             <div className="text-sm font-semibold">镜头方案确认</div>
             <div className="mt-0.5 text-[11px] text-text-secondary">
-              默认只提交 P0；P1/P2 可按需追加，原图已满足或业务不需要的镜头可标记，避免无效生成。
+              默认勾选 P0，可逐个取消或只保留某一类；P1/P2 可按需追加，原图满足或豁免不会进入生图队列。
             </div>
           </div>
           <div className="text-right">
@@ -87,6 +90,25 @@ export function ShotPlanReviewDialog() {
             <div className="text-[10px] text-text-muted">{plan.selectedCount} 张待生成</div>
           </div>
           <button onClick={close} className="btn btn-secondary !px-2 !py-1.5"><X size={13}/></button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5 border-b px-5 py-3"
+          style={{ borderColor: 'var(--divider)', background: 'var(--bg-2)' }}>
+          <span className="mr-1 text-[10px] font-semibold uppercase tracking-widest text-text-muted">快速范围</span>
+          <button onClick={() => setShotPlanTypes([...ALL_TYPES])} className="btn btn-secondary !min-h-[28px] !px-2 !py-1 !text-[10px]">
+            默认 P0
+          </button>
+          {ALL_TYPES.map(type => (
+            <button
+              key={type}
+              onClick={() => setShotPlanTypes([type])}
+              className="btn btn-secondary !min-h-[28px] !px-2 !py-1 !text-[10px]">
+              仅{TYPE_LABEL[type]}
+            </button>
+          ))}
+          <button onClick={() => setShotPlanTypes([])} className="btn btn-secondary !min-h-[28px] !px-2 !py-1 !text-[10px]">
+            <CircleSlash size={11}/>全部取消
+          </button>
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto p-4">
@@ -176,12 +198,20 @@ export function ShotPlanReviewDialog() {
                     </div>
 
                     <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setStatus(item.itemId, item, shot, 'selected')}
-                        className={clsButton(shot.status === 'selected')}
-                        title="生成这个镜头">
-                        <Sparkles size={11}/>生成
-                      </button>
+                      <label
+                        className={`flex !min-h-[28px] cursor-pointer items-center gap-1 rounded px-2 py-1 text-[10px] transition-colors ${shot.status === 'selected' ? 'bg-primary/12 text-primary' : 'text-text-secondary hover:bg-surface-hover'}`}
+                        title={shot.status === 'selected' ? '取消这个镜头，本次不生成' : '勾选后生成这个镜头'}>
+                        <input
+                          type="checkbox"
+                          checked={shot.status === 'selected'}
+                          onChange={event => setStatus(
+                            item.itemId, item, shot,
+                            event.target.checked ? 'selected' : 'proposed',
+                          )}
+                          className="h-3 w-3 accent-[var(--primary)]"
+                        />
+                        生成
+                      </label>
                       <button
                         onClick={() => setStatus(item.itemId, item, shot, 'fulfilled')}
                         disabled={item.assets.length === 0}
@@ -192,7 +222,7 @@ export function ShotPlanReviewDialog() {
                       <button
                         onClick={() => setStatus(item.itemId, item, shot, 'waived')}
                         className={clsButton(shot.status === 'waived')}
-                        title="本次豁免，不生成">
+                        title="本次豁免，并记录原因">
                         <Ban size={11}/>豁免
                       </button>
                       <span className="ml-1 w-14 text-right text-[10px] text-text-muted">
@@ -210,7 +240,7 @@ export function ShotPlanReviewDialog() {
           style={{ borderColor: 'var(--divider)' }}>
           <div className="flex items-center gap-2 text-[11px] text-text-secondary">
             <Check size={13} className="text-success" />
-            仅提交“生成”状态镜头；原图/豁免会进入覆盖校验，不会进入生图队列。
+            仅提交勾选的“生成”镜头；取消勾选只是不生成，导出前仍需生成、原图满足或豁免。
           </div>
           <div className="flex gap-2">
             <button onClick={close} className="btn btn-secondary">取消</button>
