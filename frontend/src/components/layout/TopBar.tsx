@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { CheckCircle2, FolderDown, Layers, Loader2, MoreHorizontal, Moon, Pause, Play, Plus, Save, Search, Sparkles, Sun } from 'lucide-react'
+import { CheckCircle2, CircleHelp, FolderDown, Layers, Loader2, MoreHorizontal, Moon, Pause, Play, Plus, Save, Search, Sparkles, Sun } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useWorkbench } from '../../stores/workbench-store'
 import { useNodeStore } from '../../stores/node-store'
@@ -23,6 +23,7 @@ const ACCENTS = [
 
 export function TopBar() {
   const mode = useWorkbench(s => s.mode)
+  const experienceMode = useWorkbench(s => s.experienceMode)
   const nodeProject = useNodeStore(s => s.projectMeta)
   const nodeBusy = useNodeStore(s => s.workflowBusy)
   const nodes = useNodeStore(s => s.nodes)
@@ -36,6 +37,7 @@ export function TopBar() {
   const layoutSaving = useNodeStore(s => s.layoutSaving)
   const setMode = useWorkbench(s => s.setMode)
   const setPaletteOpen = useWorkbench(s => s.setPaletteOpen)
+  const setGuideOpen = useWorkbench(s => s.setGuideOpen)
   const toast = useWorkbench(s => s.toast)
 
   const [dark, setDark] = useState(false)
@@ -70,6 +72,28 @@ export function TopBar() {
     return status === 'locked' || status === 'exported'
   }).length
   const rejected = outputs.filter(node => (node as { data?: { status?: string } }).data?.status === 'unsatisfied').length
+  const stageAvailable = {
+    prepare: true,
+    generate: outputs.length > 0,
+    review: outputs.length > 0,
+    export: locked > 0,
+  }
+  const statusOf = (status: string) => outputs.filter(node =>
+    (node as { data?: { status?: string } }).data?.status === status).length
+  const reviewUnresolved = ['pending', 'unsatisfied', 'failed', 'satisfied']
+    .reduce((sum, status) => sum + statusOf(status), 0)
+  const stageComplete = {
+    prepare: outputs.length > 0,
+    generate: outputs.length > 0 && ['queued', 'generating', 'failed'].every(status => statusOf(status) === 0),
+    review: outputs.length > 0 && locked > 0 && reviewUnresolved === 0,
+    export: outputs.length > 0 && statusOf('exported') === outputs.length,
+  }
+  const stageRequirements = {
+    prepare: '准备：确认部位素材、属性和模特后生成方案',
+    generate: '生成：先在准备阶段确认镜头方案',
+    review: '审核：需要已有生成结果',
+    export: '导出：至少锁定一张图片',
+  }
 
   const getAction = () => {
     if (mode === 'prepare') {
@@ -127,10 +151,23 @@ export function TopBar() {
       <div className="flex flex-1 justify-center">
         <div className="segment">
           {MODES.map(m => (
-            <button key={m.id} onClick={() => setMode(m.id)}
+            <button
+              key={m.id}
+              onClick={() => setMode(m.id)}
+              disabled={experienceMode === 'novice' && !stageAvailable[m.id]}
+              title={
+                experienceMode === 'novice' && !stageAvailable[m.id]
+                  ? stageRequirements[m.id]
+                  : `${m.label}：${stageComplete[m.id] ? '已完成' : '进行中'}`
+              }
               className={clsx('segment-item', mode === m.id && 'active')}>
               <span className="flex items-center gap-1.5">
                 <m.icon size={13} strokeWidth={1.5}/>{m.label}
+                {stageComplete[m.id] ? (
+                  <CheckCircle2 size={11} strokeWidth={2} style={{ color: 'var(--success)' }}/>
+                ) : mode !== m.id && stageAvailable[m.id] ? (
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: 'var(--primary)' }}/>
+                ) : null}
               </span>
             </button>
           ))}
@@ -140,6 +177,12 @@ export function TopBar() {
       {/* 右侧操作区 */}
       <div className="flex items-center gap-1.5">
         {/* 搜索入口 */}
+        <button onClick={() => setGuideOpen(true)}
+          className={clsx(iconBtn, 'hover:bg-[var(--surface-hover)]')}
+          style={iconStyle} title="流程引导 (?)">
+          <CircleHelp size={16} strokeWidth={1.5}/>
+        </button>
+
         <button onClick={() => setPaletteOpen(true)}
           className={clsx(iconBtn, 'hover:bg-[var(--surface-hover)]')}
           style={iconStyle} title="搜索 (Ctrl+K)">

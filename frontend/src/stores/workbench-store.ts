@@ -9,6 +9,8 @@ import { resolveProvider } from '../services/mock-provider'
 import { placeholderThumb } from '../lib/placeholder'
 import { fmtTime } from '../lib/status'
 
+export type ExperienceMode = 'novice' | 'normal'
+
 export type Selection =
   | { kind: 'project' }
   | { kind: 'material'; id: string }
@@ -23,6 +25,9 @@ const runningCancels = new Map<string, { cancel(): void }>()
 export interface WorkbenchState {
   project: ProjectInfo | null
   mode: WorkMode
+  experienceMode: ExperienceMode
+  guideOpen: boolean
+  guideStep: number
   selection: Selection
   saveState: 'saved' | 'saving' | 'error'
 
@@ -78,6 +83,10 @@ export interface WorkbenchState {
 
   select: (s: Selection) => void
   setMode: (m: WorkMode) => void
+  setExperienceMode: (mode: ExperienceMode) => void
+  setGuideOpen: (open: boolean) => void
+  setGuideStep: (step: number) => void
+  finishGuide: (switchToNormal?: boolean) => void
   setStatusFilter: (s: TaskStatus | null) => void
   setNewProjectOpen: (v: boolean) => void
   setPaletteOpen: (v: boolean) => void
@@ -130,6 +139,9 @@ function buildTasksForItem(item: ProductItem, cat: CategoryConfig, models: Model
 export const useWorkbench = create<WorkbenchState>((set, get) => ({
   project: null,
   mode: 'prepare',
+  experienceMode: 'novice',
+  guideOpen: false,
+  guideStep: 0,
   selection: { kind: 'project' },
   saveState: 'saved',
 
@@ -417,6 +429,23 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
 
   select: (s) => set({ selection: s }),
   setMode: (m) => set({ mode: m }),
+
+  setExperienceMode: (experienceMode) => {
+    globalThis.localStorage?.setItem('lys-experience-mode', experienceMode)
+    set({ experienceMode })
+  },
+
+  setGuideOpen: (guideOpen) => set({ guideOpen }),
+
+  setGuideStep: (guideStep) => set({
+    guideStep: Math.max(0, Math.min(3, guideStep)),
+  }),
+
+  finishGuide: (switchToNormal = false) => {
+    globalThis.localStorage?.setItem('lys-guide-completed', '1')
+    set({ guideOpen: false })
+    if (switchToNormal) get().setExperienceMode('normal')
+  },
   setStatusFilter: (s) => set({ statusFilter: s }),
   setNewProjectOpen: (v) => set({ newProjectOpen: v }),
   setPaletteOpen: (v) => set({ paletteOpen: v }),

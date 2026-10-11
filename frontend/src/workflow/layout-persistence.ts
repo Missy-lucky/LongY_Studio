@@ -1,9 +1,17 @@
-import type { AnyFlowNode, FlowInputNode, FlowProcessingNode } from '../types/node-system'
+import type { AnyFlowNode, FlowInputNode, FlowProcessingNode, ProcessType } from '../types/node-system'
 import type { ProjectLayout } from '../services/api'
 
-export const PROJECT_LAYOUT_SCHEMA = 'longy.project-layout.v1'
+export const PROJECT_LAYOUT_SCHEMA = 'longy.project-layout.v2'
 
-export function buildProjectLayout(nodes: AnyFlowNode[]): ProjectLayout {
+export interface ProjectGenerationConfig {
+  generationTypes: ProcessType[]
+  inputGenerationTypes: Record<string, ProcessType[]>
+}
+
+export function buildProjectLayout(
+  nodes: AnyFlowNode[],
+  generation?: ProjectGenerationConfig,
+): ProjectLayout {
   const positions: ProjectLayout['positions'] = {}
   const roles: ProjectLayout['roles'] = {}
   nodes.forEach(node => {
@@ -19,7 +27,37 @@ export function buildProjectLayout(nodes: AnyFlowNode[]): ProjectLayout {
       roles[`processing:${process.data.processType}`] = point
     }
   })
-  return { schemaVersion: PROJECT_LAYOUT_SCHEMA, positions, roles }
+  return {
+    schemaVersion: PROJECT_LAYOUT_SCHEMA,
+    positions,
+    roles,
+    generationTypes: generation?.generationTypes,
+    inputGenerationTypes: generation?.inputGenerationTypes,
+  }
+}
+
+const PROCESS_TYPE_SET = new Set<string>(['flat', 'partial', 'detail', 'model'])
+
+function normalizeTypes(values: unknown): ProcessType[] | undefined {
+  if (!Array.isArray(values)) return undefined
+  const normalized = values.filter((value): value is ProcessType =>
+    typeof value === 'string' && PROCESS_TYPE_SET.has(value))
+  return normalized.length ? normalized : undefined
+}
+
+export function extractGenerationConfig(layout: ProjectLayout | null | undefined): ProjectGenerationConfig | null {
+  const generationTypes = normalizeTypes(layout?.generationTypes)
+  const rawScopes = layout?.inputGenerationTypes
+  const inputGenerationTypes = rawScopes
+    ? Object.fromEntries(Object.entries(rawScopes)
+      .map(([itemId, values]) => [itemId, normalizeTypes(values) ?? []] as const)
+      .filter(([, values]) => values.length > 0))
+    : undefined
+  if (!generationTypes && !inputGenerationTypes) return null
+  return {
+    generationTypes: generationTypes ?? ['flat', 'partial', 'detail', 'model'],
+    inputGenerationTypes: inputGenerationTypes ?? {},
+  }
 }
 
 export function applyProjectLayout(nodes: AnyFlowNode[], layout: ProjectLayout | null | undefined): AnyFlowNode[] {

@@ -1,7 +1,7 @@
 /**
  * LongY Studio 桌面主进程。UI 与业务代码分别位于 frontend/ 与 backend/。
  */
-const { app, BrowserWindow, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron')
 const fs = require('fs')
 const path = require('path')
 
@@ -80,6 +80,20 @@ function createWindow() {
   mainWindow.on('maximize', () => mainWindow.webContents.send('window-maximized', true))
   mainWindow.on('unmaximize', () => mainWindow.webContents.send('window-maximized', false))
 }
+
+ipcMain.handle('select-directory', async () => {
+  if (!mainWindow) return null
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: '选择导出目录',
+    properties: ['openDirectory', 'createDirectory'],
+  })
+  return result.canceled || !result.filePaths.length ? null : result.filePaths[0]
+})
+
+ipcMain.handle('open-path', (_event, targetPath) => {
+  if (typeof targetPath !== 'string' || !targetPath.trim()) return Promise.reject(new Error('路径为空'))
+  return shell.openPath(targetPath)
+})
 
 ipcMain.on('window-minimize', () => mainWindow?.minimize())
 ipcMain.on('window-maximize', () => {

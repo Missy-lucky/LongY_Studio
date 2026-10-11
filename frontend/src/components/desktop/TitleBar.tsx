@@ -7,7 +7,10 @@ declare global {
     desktopAPI?: {
       platform: string; isElectron: boolean
       minimize: () => void; maximize: () => void; close: () => void
-      confirmClose: () => void; onBeforeClose: (cb: () => void) => void
+      confirmClose: () => void
+      selectDirectory: () => Promise<string | null>
+      openPath: (targetPath: string) => Promise<string>
+      onBeforeClose: (cb: () => void) => void
       onMaximized: (cb: (v: boolean) => void) => void
     }
   }

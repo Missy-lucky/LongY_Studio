@@ -184,6 +184,8 @@ def build_request(args: argparse.Namespace, api_key: str | None) -> tuple[str, b
     }
 
     payload = make_common_payload(args)
+    if args.mask and (args.command == "generate" or not args.image):
+        raise OpenRouterImageError("--mask requires a local edit image")
     if args.command == "generate" or not args.image:
         if args.command == "edit":
             images: list[dict[str, str]] = []
@@ -197,8 +199,11 @@ def build_request(args: argparse.Namespace, api_key: str | None) -> tuple[str, b
 
     if args.file_id or args.image_url:
         raise OpenRouterImageError("do not mix local --image uploads with --file-id or --image-url")
-
-    body, content_type = encode_multipart(payload, [Path(value) for value in args.image])
+    body, content_type = encode_multipart(
+        payload,
+        [Path(value) for value in args.image],
+        Path(args.mask) if args.mask else None,
+    )
     headers["Content-Type"] = content_type
     return url, body, headers
 
@@ -210,7 +215,9 @@ def build_api_url(base_url: str, endpoint: str) -> str:
     return base + endpoint
 
 
-def encode_multipart(fields: dict[str, Any], image_paths: list[Path]) -> tuple[bytes, str]:
+def encode_multipart(
+    fields: dict[str, Any], image_paths: list[Path], mask_path: Path | None = None
+) -> tuple[bytes, str]:
     boundary = "----openrouter-icu-" + uuid.uuid4().hex
     chunks: list[bytes] = []
 
@@ -236,6 +243,19 @@ def encode_multipart(fields: dict[str, Any], image_paths: list[Path]) -> tuple[b
             ).encode("utf-8")
         )
         chunks.append(path.read_bytes())
+        chunks.append(b"\r\n")
+    if mask_path is not None:
+        if not mask_path.is_file():
+            raise OpenRouterImageError(f"mask file does not exist: {mask_path}")
+        mime_type = mimetypes.guess_type(mask_path.name)[0] or "application/octet-stream"
+        chunks.append(f"--{boundary}\r\n".encode("utf-8"))
+        chunks.append(
+            (
+                'Content-Disposition: form-data; name="mask"; '
+                f'filename="{mask_path.name}"\r\nContent-Type: {mime_type}\r\n\r\n'
+            ).encode("utf-8")
+        )
+        chunks.append(mask_path.read_bytes())
         chunks.append(b"\r\n")
 
     chunks.append(f"--{boundary}--\r\n".encode("utf-8"))
@@ -631,6 +651,7 @@ def build_parser() -> argparse.ArgumentParser:
     edit.add_argument("--image", "--image-file", action="append", default=[], help="Local input image path. Repeat for multiple images.")
     edit.add_argument("--file-id", "--file_id", action="append", default=[], help="OpenRouter/OpenAI file ID image reference.")
     edit.add_argument("--image-url", "--image_url", action="append", default=[], help="Remote image URL reference.")
+    edit.add_argument("--mask", type=Path, help="PNG mask for the first local image; transparent pixels mark the edit area.")
 
     return parser
 

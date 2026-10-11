@@ -8,6 +8,8 @@ declare global {
       maximize: () => void
       close: () => void
       confirmClose: () => void
+      selectDirectory: () => Promise<string | null>
+      openPath: (targetPath: string) => Promise<string>
       onBeforeClose: (callback: () => void) => void
       onMaximized: (callback: (value: boolean) => void) => void
     }

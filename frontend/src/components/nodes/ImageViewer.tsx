@@ -98,13 +98,34 @@ export function NodeImageViewer() {
             dragPoint.current = { x: event.clientX, y: event.clientY, offsetX: offset.x, offsetY: offset.y }
           }}
         >
-          <img
-            src={viewer.src}
-            alt={viewer.title}
-            draggable={false}
-            className="max-h-[78vh] max-w-full select-none object-contain"
-            style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`, transformOrigin: 'center center' }}
-          />
+          <div className="flex items-center justify-center gap-5">
+            <figure className="relative flex min-w-0 flex-col items-center">
+              <img
+                src={viewer.src}
+                alt={viewer.title}
+                draggable={false}
+                className="max-h-[78vh] max-w-full select-none object-contain"
+                style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`, transformOrigin: 'center center' }}
+              />
+              <figcaption className="absolute left-2 top-2 rounded bg-black/65 px-2 py-0.5 font-mono text-[10px] text-white">
+                {viewer.subtitle || '当前'}
+              </figcaption>
+            </figure>
+            {viewer.compareSrc && (
+              <figure className="relative flex min-w-0 flex-col items-center">
+                <img
+                  src={viewer.compareSrc}
+                  alt={viewer.compareTitle || '对比版本'}
+                  draggable={false}
+                  className="max-h-[78vh] max-w-full select-none object-contain"
+                  style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`, transformOrigin: 'center center' }}
+                />
+                <figcaption className="absolute left-2 top-2 rounded bg-black/65 px-2 py-0.5 font-mono text-[10px] text-white">
+                  {viewer.compareSubtitle || '历史版本'}
+                </figcaption>
+              </figure>
+            )}
+          </div>
           <div className="absolute bottom-3 right-4 rounded-full bg-black/60 px-2.5 py-1 font-mono text-[10px] text-white">
             {Math.round(scale * 100)}%
           </div>

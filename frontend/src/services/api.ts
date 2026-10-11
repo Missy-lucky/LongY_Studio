@@ -24,9 +24,11 @@ export interface LayoutPosition {
 }
 
 export interface ProjectLayout {
-  schemaVersion: 'longy.project-layout.v1'
+  schemaVersion: 'longy.project-layout.v1' | 'longy.project-layout.v2'
   positions: Record<string, LayoutPosition>
   roles: Record<string, LayoutPosition>
+  generationTypes?: string[]
+  inputGenerationTypes?: Record<string, string[]>
 }
 
 export interface RemoteProject {
@@ -57,10 +59,35 @@ export interface RemoteAsset {
   itemId: string | null
   viewSlot: string | null
 }
+export interface RemoteTaskVersion {
+  id: string
+  version: number
+  status: string
+  cost: number
+  durationMs: number | null
+  filePath: string | null
+  qcScore: number | null
+  qcPassed: boolean | null
+  qcReportPath: string | null
+  tier?: 'draft' | 'hd'
+  provider?: ProviderId | string
+  createdAt?: string
+  reason?: string | null
+  note?: string
+  prompt?: string
+  negativePrompt?: string
+  referenceMode?: 'original' | 'generated'
+  baseVersionId?: string | null
+  maskPath?: string | null
+}
+
 export interface RemoteTask {
   id: string
   code: string
   name: string
+  itemId?: string | null
+  prompt?: string
+  negativePrompt?: string
   type: 'flat' | 'detail' | 'partial' | 'model'
   shotId?: string | null
   shotName?: string | null
@@ -71,18 +98,16 @@ export interface RemoteTask {
   tier: 'draft' | 'hd'
   currentVersionId: string | null
   modelId: string | null
-  versions: Array<{
-    id: string
-    version: number
-    status: string
-    cost: number
-    durationMs: number | null
-    filePath: string | null
-    qcScore: number | null
-    qcPassed: boolean | null
-    qcReportPath: string | null
-  }>
+  versions: RemoteTaskVersion[]
 }
+export interface ProjectEvent {
+  id: number
+  time: string
+  taskId?: string | null
+  type: string
+  message: string
+}
+
 export interface ProviderInfo {
   id: ProviderId | string
   name: string
@@ -269,20 +294,55 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ taskIds }),
     }),
+  pauseTaskQueue: (projectId: string) =>
+    request<{ paused: boolean }>(`/projects/${projectId}/tasks/queue/pause`, { method: 'POST' }),
+  resumeTaskQueue: (projectId: string) =>
+    request<{ paused: boolean }>(`/projects/${projectId}/tasks/queue/resume`, { method: 'POST' }),
+  cancelTasks: (projectId: string, taskIds: string[]) =>
+    request<{ cancelled: number; cancelling: number }>(`/projects/${projectId}/tasks/queue/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ taskIds }),
+    }),
+  listProjectEvents: (projectId: string, afterId = 0, limit = 200) =>
+    request<{ events: ProjectEvent[]; lastId: number }>(`/projects/${projectId}/events?afterId=${afterId}&limit=${limit}`),
   reviewTask: (projectId: string, taskId: string, action: 'accept' | 'reject' | 'lock' | 'unlock', reason?: string) =>
     request<{ ok: boolean }>(`/projects/${projectId}/tasks/${taskId}/review`, {
       method: 'POST',
       body: JSON.stringify({ action, reason: reason ?? null, note: '' }),
     }),
-  regenerateTask: (projectId: string, taskId: string) =>
-    request<{ version: number }>(`/projects/${projectId}/tasks/${taskId}/regenerate`, { method: 'POST' }),
+  regenerateTask: (
+    projectId: string,
+    taskId: string,
+    revision?: {
+      prompt?: string
+      negativePrompt?: string
+      reason?: string
+      note?: string
+      referenceMode?: 'original' | 'generated'
+      baseVersionId?: string | null
+      maskDataUrl?: string
+    },
+  ) => request<{ version: number }>(`/projects/${projectId}/tasks/${taskId}/regenerate`, {
+      method: 'POST',
+      body: JSON.stringify(revision ?? {}),
+    }),
   startHdRepair: (projectId: string, taskId: string) =>
     request<{ version: number; versionId: string; tier: 'hd' }>(`/projects/${projectId}/tasks/${taskId}/hd-repair`, { method: 'POST' }),
   getVersionQc: (projectId: string, taskId: string, versionId: string) =>
     request<VersionQcResponse>(`/projects/${projectId}/tasks/${taskId}/versions/${versionId}/qc`),
-  exportPreview: (projectId: string) =>
-    request<ExportPreview>(`/projects/${projectId}/exports/preview`),
-  exportTasks: (projectId: string, taskIds: string[]) =>
+  restoreTaskVersion: (projectId: string, taskId: string, versionId: string) =>
+    request<{ ok: boolean }>(`/projects/${projectId}/tasks/${taskId}/versions/${versionId}/restore`, { method: 'POST' }),
+  exportPreview: (projectId: string, namingScheme: 'detailed' | 'compact' = 'detailed') =>
+    request<ExportPreview>(`/projects/${projectId}/exports/preview?naming_scheme=${namingScheme}`),
+  exportTasks: (
+    projectId: string,
+    taskIds: string[],
+    options?: {
+      assetIds?: string[]
+      targetDir?: string
+      namingScheme?: 'detailed' | 'compact'
+    },
+  ) =>
     request<{
       exported: number
       failed: Array<{ taskId?: string; assetId?: string; reason: string }>
@@ -291,6 +351,11 @@ export const api = {
       targetDir: string
     }>(`/projects/${projectId}/exports`, {
       method: 'POST',
-      body: JSON.stringify({ taskIds }),
+      body: JSON.stringify({
+        taskIds,
+        assetIds: options?.assetIds ?? [],
+        targetDir: options?.targetDir,
+        namingScheme: options?.namingScheme ?? 'detailed',
+      }),
     }),
 }

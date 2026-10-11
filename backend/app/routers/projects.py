@@ -67,9 +67,13 @@ class LayoutPosition(BaseModel):
 class ProjectLayoutIn(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    schema_version: str = Field(default="longy.project-layout.v1", alias="schemaVersion")
+    schema_version: str = Field(default="longy.project-layout.v2", alias="schemaVersion")
     positions: dict[str, LayoutPosition] = Field(default_factory=dict)
     roles: dict[str, LayoutPosition] = Field(default_factory=dict)
+    generation_types: list[str] = Field(default_factory=list, alias="generationTypes")
+    input_generation_types: dict[str, list[str]] = Field(
+        default_factory=dict, alias="inputGenerationTypes"
+    )
 
 
 def decode_layout(value: str | None) -> dict | None:
@@ -79,11 +83,16 @@ def decode_layout(value: str | None) -> dict | None:
         layout = json.loads(value)
     except json.JSONDecodeError:
         return None
-    return {
+    decoded = {
         "schemaVersion": layout.get("schemaVersion", "longy.project-layout.v1"),
         "positions": layout.get("positions", {}),
         "roles": layout.get("roles", {}),
     }
+    if layout.get("generationTypes"):
+        decoded["generationTypes"] = layout["generationTypes"]
+    if layout.get("inputGenerationTypes"):
+        decoded["inputGenerationTypes"] = layout["inputGenerationTypes"]
+    return decoded
 
 
 @router.put("/{project_id}/layout")

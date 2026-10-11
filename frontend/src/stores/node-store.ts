@@ -5,12 +5,13 @@ import type {
 } from '../types/node-system'
 import { DEFAULT_INPUT_NODES, MODEL_STYLES, findCategory } from '../data/preset-categories'
 import { PROCESS_ORDER, PROCESS_TITLES } from '../data/process-templates'
-import { api, type ConsistencyQcReport, type ExportPreview, type ProviderInfo, type RemoteProject, type RemoteTask, type ShotPlanPreview, type ShotSelectionInput } from '../services/api'
+import { api, type ConsistencyQcReport, type ExportPreview, type ProjectEvent, type ProviderInfo, type RemoteProject, type RemoteTask, type ShotPlanPreview, type ShotSelectionInput } from '../services/api'
 import { applyModelSelection } from '../workflow/model-selection'
 import { inputPosition, modelPosition, organizeNodes, outputPosition } from '../workflow/node-layout'
-import { applyProjectLayout, buildProjectLayout } from '../workflow/layout-persistence'
+import { applyProjectLayout, buildProjectLayout, extractGenerationConfig } from '../workflow/layout-persistence'
 import { buildRestoredProjectGraph } from '../workflow/project-restore'
 import { activeBackendStatus, syncNodesWithTasks } from '../workflow/task-sync'
+import { useWorkbench } from './workbench-store'
 
 let uid = 0
 const nid = (p: string) => `${p}-${Date.now().toString(36)}-${(uid++).toString(36)}`
@@ -19,10 +20,33 @@ const revokeThumbnail = (url?: string | null) => {
   if (url?.startsWith('blob:')) setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
+function advanceAfterGenerationRun() {
+  const outputs = useNodeStore.getState().nodes
+    .filter(node => node.type === 'output')
+    .map(node => (node as FlowOutputNode).data)
+  if (!outputs.length) return
+  const reviewable = outputs.some(output =>
+    ['pending', 'satisfied', 'unsatisfied', 'locked', 'exported'].includes(output.status))
+  if (reviewable) useWorkbench.getState().setMode('review')
+}
+
+function advanceAfterReviewSettled() {
+  const outputs = useNodeStore.getState().nodes
+    .filter(node => node.type === 'output')
+    .map(node => (node as FlowOutputNode).data)
+  const needsReview = outputs.some(output =>
+    ['pending', 'satisfied', 'unsatisfied', 'failed'].includes(output.status))
+  const locked = outputs.filter(output => ['locked', 'exported'].includes(output.status)).length
+  if (locked > 0 && !needsReview) useWorkbench.getState().setMode('export')
+}
+
 export interface NodeImageViewer {
   src: string
   title: string
   subtitle?: string
+  compareSrc?: string
+  compareTitle?: string
+  compareSubtitle?: string
 }
 
 export interface RealGenerationConfirm {
@@ -55,6 +79,13 @@ export interface ExportResultState {
   targetDir: string
 }
 
+export interface ExportSelectionState {
+  taskIds: string[]
+  assetIds: string[]
+  targetDir: string
+  namingScheme: 'detailed' | 'compact'
+}
+
 export interface NodeStoreState {
   imageViewer: NodeImageViewer | null
   nodes: AnyFlowNode[]
@@ -74,14 +105,21 @@ export interface NodeStoreState {
   providerId: ProviderInfo['id']
   providers: ProviderInfo[]
   generationTypes: ProcessType[]
+  inputGenerationTypes: Record<string, ProcessType[]>
+  promptRevisionNodeId: string | null
   workflowBusy: boolean
   workflowMessage: string
+  queuePaused: boolean
+  taskStages: Record<string, { stage: string; message: string; eventId: number }>
+  workflowEvents: ProjectEvent[]
+  workflowEventLastId: number
   restoreAttempted: boolean
   layoutDirty: boolean
   layoutSaving: boolean
   layoutPrompt: LayoutSavePrompt | null
   realGenerationConfirm: RealGenerationConfirm | null
   exportPreview: ExportPreview | null
+  exportSelection: ExportSelectionState
   shotPlan: ShotPlanPreview | null
   exportResult: ExportResultState | null
   versionQc: VersionQcState | null
@@ -104,8 +142,16 @@ export interface NodeStoreState {
   discardLayoutPrompt: () => void
   cancelLayoutPrompt: () => void
   refreshProviders: () => Promise<void>
+  refreshWorkflowEvents: () => Promise<void>
+  pauseTaskQueue: () => Promise<void>
+  resumeTaskQueue: () => Promise<void>
+  cancelQueuedOrRunning: (nodeIds: string[]) => Promise<void>
+  retryFailedOutputs: () => Promise<void>
   setGenerationTypes: (types: ProcessType[]) => void
   toggleGenerationType: (type: ProcessType) => void
+  setInputGenerationType: (itemId: string, type: ProcessType, enabled: boolean) => void
+  copyGenerationTypesToAll: (types: ProcessType[]) => void
+  openPromptRevision: (nodeId: string | null) => void
   setShotPlanTypes: (types: ProcessType[]) => void
   addInputNode: (categoryId: string) => void
   removeNode: (nodeId: string) => void
@@ -126,17 +172,32 @@ export interface NodeStoreState {
   addCustomShot: (itemId: string, shot: { name: string; type: RemoteTask['type']; priority: ShotPlanPreview['items'][number]['shots'][number]['priority']; promptHints: string }) => void
   startGeneration: () => Promise<void>
   markSatisfied: (nodeId: string) => Promise<void>
+  markSatisfiedBatch: (nodeIds: string[]) => Promise<void>
   markUnsatisfied: (nodeId: string, reason?: string, customPrompt?: string) => Promise<void>
-  regenerate: (nodeId: string) => Promise<void>
+  regenerate: (
+    nodeId: string,
+    revision?: {
+      prompt?: string
+      negativePrompt?: string
+      reason?: string
+      note?: string
+      referenceMode?: 'original' | 'generated'
+      baseVersionId?: string | null
+      maskDataUrl?: string
+    },
+  ) => Promise<void>
   startHdRepair: (nodeId: string) => Promise<void>
   lockOutput: (nodeId: string) => Promise<void>
+  lockOutputsBatch: (nodeIds: string[]) => Promise<void>
+  restoreOutputVersion: (nodeId: string, versionId: string) => Promise<void>
   exportLocked: () => Promise<void>
+  setExportSelection: (patch: Partial<ExportSelectionState>) => void
   confirmExportLocked: () => Promise<void>
   closeExportPreview: () => void
   confirmRealGeneration: () => Promise<void>
   cancelRealGeneration: () => void
   closeExportResult: () => void
-  openVersionQc: (nodeId: string) => Promise<void>
+  openVersionQc: (nodeId: string, versionId?: string) => Promise<void>
   closeVersionQc: () => void
   removeOutput: (nodeId: string) => void
   openImageViewer: (viewer: NodeImageViewer) => void
@@ -198,6 +259,24 @@ function applyTasks(tasks: RemoteTask[]): void {
     workflowMessage: `后端任务同步完成：${tasks.length} 个任务`,
   }))
 }
+function applyProjectEvents(events: ProjectEvent[]): void {
+  if (!events.length) return
+  const stageUpdates: Record<string, { stage: string; message: string; eventId: number }> = {}
+  events.forEach(event => {
+    if (!event.taskId || !event.type.startsWith('task.stage.')) return
+    stageUpdates[event.taskId] = {
+      stage: event.type.slice('task.stage.'.length),
+      message: event.message,
+      eventId: event.id,
+    }
+  })
+  useNodeStore.setState(state => ({
+    taskStages: { ...state.taskStages, ...stageUpdates },
+    workflowEvents: [...events].reverse().concat(state.workflowEvents).slice(0, 300),
+    workflowEventLastId: Math.max(state.workflowEventLastId, ...events.map(event => event.id)),
+  }))
+}
+
 async function pollTasks(runId: number): Promise<void> {
   while (true) {
     await sleep(800)
@@ -205,9 +284,18 @@ async function pollTasks(runId: number): Promise<void> {
     const projectId = useNodeStore.getState().backendProjectId
     if (!projectId) return
     try {
+      await useNodeStore.getState().refreshWorkflowEvents()
       const { tasks } = await api.listTasks(projectId)
       applyTasks(tasks)
       const scopedTasks = tasks.filter(task => useNodeStore.getState().generationTypes.includes(task.type))
+      if (
+        useNodeStore.getState().queuePaused &&
+        scopedTasks.some(task => task.status === 'queued') &&
+        !scopedTasks.some(task => task.status === 'generating')
+      ) {
+        useNodeStore.setState({ workflowBusy: false, workflowMessage: '队列已暂停，等待恢复后继续处理排队任务' })
+        return
+      }
       if (!scopedTasks.some(task => activeBackendStatus(task.status))) {
         const review = scopedTasks.filter(task => task.status === 'review').length
         const failed = scopedTasks.filter(task => task.status === 'failed').length
@@ -246,14 +334,26 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
   providerId: 'mock',
   providers: [],
   generationTypes: ['flat', 'partial', 'detail', 'model'],
+  inputGenerationTypes: {},
+  promptRevisionNodeId: null,
   workflowBusy: false,
   workflowMessage: '',
+  queuePaused: false,
+  taskStages: {},
+  workflowEvents: [],
+  workflowEventLastId: 0,
   restoreAttempted: false,
   layoutDirty: false,
   layoutSaving: false,
   layoutPrompt: null,
   realGenerationConfirm: null,
   exportPreview: null,
+  exportSelection: {
+    taskIds: [],
+    assetIds: [],
+    targetDir: globalThis.localStorage?.getItem('lys-export-dir') ?? '',
+    namingScheme: globalThis.localStorage?.getItem('lys-export-naming') === 'compact' ? 'compact' : 'detailed',
+  },
   shotPlan: null,
   exportResult: null,
   versionQc: null,
@@ -330,6 +430,8 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
       nodes: [], edges: [], canvasInitialized: false, backendProjectId: null, projectMeta: null,
       workflowMessage: '已新建空白工作台，上传素材后会创建新项目',
       realGenerationConfirm: null, exportResult: null,
+      queuePaused: false, taskStages: {}, workflowEvents: [], workflowEventLastId: 0,
+      inputGenerationTypes: {}, generationTypes: ['flat', 'partial', 'detail', 'model'],
       draftProjectMeta: { sku: '', name: '节点工作台项目', platform: 'local', style: 'v2 final', budget: 100 },
       projectSettingsOpen: true,
       layoutDirty: false,
@@ -373,11 +475,22 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
         backendProjectId: projectId,
         projectMeta: project,
         providerId: taskProvider === 'openrouter-icu' ? 'openrouter-icu' : 'mock',
+        generationTypes: extractGenerationConfig(project.layout)?.generationTypes ?? ['flat', 'partial', 'detail', 'model'],
+        inputGenerationTypes: extractGenerationConfig(project.layout)?.inputGenerationTypes ?? {},
+        queuePaused: false,
+        taskStages: {},
+        workflowEvents: [],
+        workflowEventLastId: 0,
         workflowMessage: `已恢复项目 ${project.sku}：${assets.length} 张素材，${tasks.length} 个任务`,
         layoutDirty: false,
         layoutPrompt: null,
       })
       await get().refreshProviders()
+      if (tasks.some(task => activeBackendStatus(task.status))) {
+        const runId = get().versionCounter + 1
+        set({ versionCounter: runId })
+        void pollTasks(runId)
+      }
     } catch (error) {
       globalThis.localStorage?.removeItem('longy-backend-project-id')
       projectPromise = null
@@ -431,7 +544,10 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
     set({ layoutSaving: true, workflowMessage: '正在保存画布布局...' })
     try {
       const projectId = await ensureProject()
-      await api.saveProjectLayout(projectId, buildProjectLayout(get().nodes))
+      await api.saveProjectLayout(projectId, buildProjectLayout(get().nodes, {
+        generationTypes: get().generationTypes,
+        inputGenerationTypes: get().inputGenerationTypes,
+      }))
       set({ layoutDirty: false, workflowMessage: '画布布局已随项目保存' })
       return true
     } catch (error) {
@@ -503,12 +619,146 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
     return { generationTypes: active }
   }),
 
+  setInputGenerationType: (itemId, type, enabled) => set(state => {
+    const current = state.inputGenerationTypes[itemId] ?? state.generationTypes
+    const next = enabled
+      ? current.includes(type) ? current : [...current, type]
+      : current.filter(item => item !== type)
+    return {
+      inputGenerationTypes: {
+        ...state.inputGenerationTypes,
+        [itemId]: next.length ? next : [],
+      },
+      layoutDirty: true,
+    }
+  }),
+
+  copyGenerationTypesToAll: types => set(state => {
+    const scopedItems = state.nodes
+      .filter(node => node.type === 'input')
+      .map(node => (node as FlowInputNode).data.image?.remote?.itemId)
+      .filter((itemId): itemId is string => Boolean(itemId))
+    return {
+      generationTypes: types,
+      inputGenerationTypes: Object.fromEntries(
+        Array.from(new Set(scopedItems)).map(itemId => [itemId, [...types]]),
+      ),
+      layoutDirty: true,
+    }
+  }),
+
+  openPromptRevision: nodeId => set({ promptRevisionNodeId: nodeId }),
+
   refreshProviders: async () => {
     try {
       const { providers } = await api.listProviders()
       set({ providers })
     } catch (error) {
       set({ workflowMessage: error instanceof Error ? error.message : 'Provider 列表读取失败' })
+    }
+  },
+
+  refreshWorkflowEvents: async () => {
+    const projectId = get().backendProjectId
+    if (!projectId) return
+    try {
+      const response = await api.listProjectEvents(projectId, get().workflowEventLastId, 100)
+      applyProjectEvents(response.events)
+    } catch {
+      // Task polling remains authoritative; event polling is only presentation enhancement.
+    }
+  },
+
+  pauseTaskQueue: async () => {
+    const projectId = get().backendProjectId
+    if (!projectId) return
+    try {
+      await api.pauseTaskQueue(projectId)
+      set({ queuePaused: true, workflowMessage: '队列已暂停，不会再领取新任务；已开始生成的任务会继续完成' })
+      await get().refreshWorkflowEvents()
+    } catch (error) {
+      set({ workflowMessage: error instanceof Error ? error.message : '队列暂停失败' })
+    }
+  },
+
+  resumeTaskQueue: async () => {
+    const projectId = get().backendProjectId
+    if (!projectId) return
+    try {
+      await api.resumeTaskQueue(projectId)
+      set({ queuePaused: false, workflowMessage: '队列已恢复' })
+      const hasActiveTasks = get().nodes
+        .some(node => node.type === 'output' && ['queued', 'generating'].includes((node as FlowOutputNode).data.status))
+      if (hasActiveTasks && !get().workflowBusy) {
+        const runId = get().versionCounter + 1
+        set({ versionCounter: runId, workflowBusy: true })
+        void pollTasks(runId)
+      }
+      await get().refreshWorkflowEvents()
+    } catch (error) {
+      set({ workflowMessage: error instanceof Error ? error.message : '队列恢复失败' })
+    }
+  },
+
+  cancelQueuedOrRunning: async nodeIds => {
+    const projectId = get().backendProjectId
+    const outputs = get().nodes
+      .filter(node => node.type === 'output' && nodeIds.includes(node.id))
+      .map(node => node as FlowOutputNode)
+      .filter(node => ['queued', 'generating'].includes(node.data.status))
+    if (!projectId || !outputs.length) return
+    set({ workflowBusy: true, workflowMessage: '正在取消任务...' })
+    try {
+      const result = await api.cancelTasks(projectId, outputs.map(output => output.data.taskId))
+      const ids = new Set(outputs.filter(output => output.data.status === 'queued').map(output => output.id))
+      set(state => ({
+        nodes: state.nodes.map(node => node.type === 'output' && ids.has(node.id)
+          ? { ...node, data: { ...(node as FlowOutputNode).data, status: 'failed' } }
+          : node),
+        workflowMessage: `已取消 ${result.cancelled} 个排队任务；${result.cancelling} 个运行中任务正在停止`,
+      }))
+      await get().refreshWorkflowEvents()
+    } catch (error) {
+      set({ workflowMessage: error instanceof Error ? error.message : '任务取消失败' })
+    } finally {
+      set({ workflowBusy: false })
+    }
+  },
+
+  retryFailedOutputs: async () => {
+    const projectId = get().backendProjectId
+    const outputs = get().nodes
+      .filter(node => node.type === 'output')
+      .map(node => node as FlowOutputNode)
+      .filter(node => node.data.status === 'failed')
+    if (!projectId || !outputs.length) return
+    set({ workflowBusy: true, workflowMessage: `正在重试 ${outputs.length} 个失败任务...` })
+    try {
+      await Promise.all(outputs.map(output => api.regenerateTask(projectId, output.data.taskId)))
+      const ids = new Set(outputs.map(output => output.id))
+      const runId = get().versionCounter + 1
+      set(state => ({
+        versionCounter: runId,
+        nodes: state.nodes.map(node => node.type === 'output' && ids.has(node.id)
+          ? {
+              ...node,
+              data: {
+                ...(node as FlowOutputNode).data,
+                status: 'generating',
+                versionId: null,
+                thumbnail: null,
+                cost: 0,
+                durationMs: null,
+              },
+            }
+          : node),
+        edges: state.edges.map(edge => edge.edgeType === 'output' ? { ...edge, animated: true } : edge),
+      }))
+      await pollTasks(runId)
+    } catch (error) {
+      set({ workflowMessage: error instanceof Error ? error.message : '失败任务重试失败' })
+    } finally {
+      set({ workflowBusy: false })
     }
   },
 
@@ -600,6 +850,11 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
               }
             : node),
           edges: state.edges.map(edge => ({ ...edge, source: edge.source === nodeId ? stableNodeId : edge.source })),
+          selectedNodeId: stableNodeId,
+          inputGenerationTypes: {
+            ...state.inputGenerationTypes,
+            [item.id]: state.inputGenerationTypes[item.id] ?? [...state.generationTypes],
+          },
           workflowMessage: `素材已入库：${file.name}`,
           layoutDirty: true,
         }))
@@ -795,12 +1050,15 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
           data: {
             taskId: task.id, versionId: task.currentVersionId,
             taskCode: task.code, taskName: task.name,
+            itemId: task.itemId ?? null,
+            prompt: task.prompt ?? '', negativePrompt: task.negativePrompt ?? '',
             shotId: task.shotId ?? null, shotName: task.shotName ?? null,
             priority: task.priority ?? null, imageType: task.type,
             status: 'queued' as const, thumbnail: null, version: 1,
-            parentOutputId: null, rejectReason: null, customPrompt: null,
+            parentOutputId: null, rejectReason: null, customPrompt: null, revisionNote: null,
+            referenceMode: 'original', baseVersionId: null,
             cost: 0, durationMs: null, tier: task.tier,
-            qcScore: null, qcPassed: null,
+            qcScore: null, qcPassed: null, versions: task.versions,
           },
         }
       })
@@ -810,7 +1068,14 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
           .find(node => node.type === 'processing' && (node as FlowProcessingNode).data.processType === output.data.imageType)
         return { id: nid('edge'), source: proc!.id, target: output.id, edgeType: 'output' as const }
       })
+      const nextInputScopes = { ...get().inputGenerationTypes }
+      tasks.forEach(task => {
+        if (task.itemId && !nextInputScopes[task.itemId]) {
+          nextInputScopes[task.itemId] = [...get().generationTypes]
+        }
+      })
       set(state => ({
+        inputGenerationTypes: nextInputScopes,
         nodes: organizeNodes([
           ...state.nodes.filter(node => node.type !== 'output'),
           ...outputNodes,
@@ -831,6 +1096,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
         layoutDirty: true,
         workflowMessage: `任务方案已确认：${tasks.length} 个 ${get().providerId === 'mock' ? 'Mock' : 'OpenRouter'} 任务`,
       }))
+      useWorkbench.getState().setMode('generate')
     } catch (error) {
       set({ workflowMessage: error instanceof Error ? error.message : '镜头方案确认失败' })
     } finally {
@@ -957,7 +1223,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
     }
     const taskIds = outputs
       .filter(output => ['queued', 'failed'].includes(output.status))
-      .filter(output => get().generationTypes.includes(output.imageType))
+      .filter(output => (get().inputGenerationTypes[output.itemId ?? ''] ?? get().generationTypes).includes(output.imageType))
       .map(output => output.taskId)
     if (!taskIds.length) {
       set({ workflowMessage: '没有待生成任务；请先生成方案或重生成失败任务' })
@@ -1000,6 +1266,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
         edges: state.edges.map(edge => edge.edgeType === 'output' ? { ...edge, animated: true } : edge),
       }))
       await pollTasks(runId)
+      advanceAfterGenerationRun()
     } catch (error) {
       set({ workflowMessage: error instanceof Error ? error.message : '任务提交失败' })
     } finally {
@@ -1029,6 +1296,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
         edges: state.edges.map(edge => edge.edgeType === 'output' ? { ...edge, animated: true } : edge),
       }))
       await pollTasks(runId)
+      advanceAfterGenerationRun()
     } catch (error) {
       set({ workflowMessage: error instanceof Error ? error.message : '真实生成提交失败' })
     } finally {
@@ -1059,6 +1327,32 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
     }
   },
 
+  markSatisfiedBatch: async nodeIds => {
+    const projectId = get().backendProjectId
+    const outputs = get().nodes
+      .filter(node => node.type === 'output' && nodeIds.includes(node.id))
+      .map(node => node as FlowOutputNode)
+      .filter(node => node.data.status === 'pending')
+    if (!projectId || !outputs.length) return
+    set({ workflowBusy: true, workflowMessage: `正在批量审核 ${outputs.length} 张图片...` })
+    try {
+      await Promise.all(outputs.map(output => api.reviewTask(projectId, output.data.taskId, 'accept')))
+      const ids = new Set(outputs.map(output => output.id))
+      set(state => ({
+        nodes: state.nodes.map(node => node.type === 'output' && ids.has(node.id)
+          ? { ...node, data: { ...(node as FlowOutputNode).data, status: 'satisfied' } }
+          : node),
+      }))
+      const { tasks } = await api.listTasks(projectId)
+      applyTasks(tasks)
+      set({ workflowMessage: `批量审核完成：${outputs.length} 张已标记满意` })
+    } catch (error) {
+      set({ workflowMessage: error instanceof Error ? error.message : '批量审核失败' })
+    } finally {
+      set({ workflowBusy: false })
+    }
+  },
+
   markUnsatisfied: async (nodeId, reason, customPrompt) => {
     const output = get().nodes.find(node => node.id === nodeId) as FlowOutputNode | undefined
     const projectId = get().backendProjectId
@@ -1073,6 +1367,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
               data: {
                 ...(node as FlowOutputNode).data,
                 status: 'unsatisfied', rejectReason: reason ?? null, customPrompt: customPrompt ?? null,
+                revisionNote: customPrompt ?? null,
               },
             }
           : node),
@@ -1083,13 +1378,23 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
     }
   },
 
-  regenerate: async nodeId => {
+  regenerate: async (nodeId, revision) => {
     const output = get().nodes.find(node => node.id === nodeId) as FlowOutputNode | undefined
     const projectId = get().backendProjectId
     if (!output || !projectId) return
-    set({ workflowBusy: true, workflowMessage: '正在创建新版本...' })
+    set({ workflowBusy: true, workflowMessage: revision ? '正在提交提示词修正...' : '正在创建新版本...' })
     try {
-      const result = await api.regenerateTask(projectId, output.data.taskId)
+      const result = await api.regenerateTask(projectId, output.data.taskId, revision && {
+        prompt: revision.prompt?.trim() || undefined,
+        negativePrompt: revision.negativePrompt?.trim() || undefined,
+        reason: revision.reason?.trim() || undefined,
+        note: revision.note?.trim() || undefined,
+        referenceMode: revision.referenceMode ?? 'original',
+        baseVersionId: revision.referenceMode === 'generated'
+          ? revision.baseVersionId ?? output.data.versionId
+          : undefined,
+        maskDataUrl: revision.maskDataUrl,
+      })
       const runId = get().versionCounter + 1
       set(state => ({
         versionCounter: runId,
@@ -1099,6 +1404,11 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
               data: {
                 ...(node as FlowOutputNode).data,
                 status: 'generating', version: result.version, versionId: null,
+                prompt: revision?.prompt?.trim() || output.data.prompt,
+                negativePrompt: revision?.negativePrompt?.trim() || output.data.negativePrompt,
+                rejectReason: revision?.reason ?? output.data.rejectReason,
+                customPrompt: revision?.prompt?.trim() || null,
+                revisionNote: revision?.note?.trim() || null,
                 thumbnail: null, cost: 0, durationMs: null,
               },
             }
@@ -1163,6 +1473,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
           : node),
         workflowMessage: `${output.data.taskCode} v${output.data.version} 已锁定`,
       }))
+      advanceAfterReviewSettled()
     } catch (error) {
       set({ workflowMessage: error instanceof Error ? error.message : '版本锁定失败' })
     } finally {
@@ -1170,21 +1481,68 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
     }
   },
 
+  lockOutputsBatch: async nodeIds => {
+    const projectId = get().backendProjectId
+    const outputs = get().nodes
+      .filter(node => node.type === 'output' && nodeIds.includes(node.id))
+      .map(node => node as FlowOutputNode)
+      .filter(node => node.data.status === 'satisfied')
+    if (!projectId || !outputs.length) return
+    set({ workflowBusy: true, workflowMessage: `正在批量锁定 ${outputs.length} 张图片...` })
+    try {
+      await Promise.all(outputs.map(output => api.reviewTask(projectId, output.data.taskId, 'lock')))
+      const ids = new Set(outputs.map(output => output.id))
+      set(state => ({
+        nodes: state.nodes.map(node => node.type === 'output' && ids.has(node.id)
+          ? { ...node, data: { ...(node as FlowOutputNode).data, status: 'locked' } }
+          : node),
+      }))
+      const { tasks } = await api.listTasks(projectId)
+      applyTasks(tasks)
+      set({ workflowMessage: `批量锁定完成：${outputs.length} 张` })
+      advanceAfterReviewSettled()
+    } catch (error) {
+      set({ workflowMessage: error instanceof Error ? error.message : '批量锁定失败' })
+    } finally {
+      set({ workflowBusy: false })
+    }
+  },
+
+  restoreOutputVersion: async (nodeId, versionId) => {
+    const output = get().nodes.find(node => node.id === nodeId) as FlowOutputNode | undefined
+    const projectId = get().backendProjectId
+    if (!output || !projectId) return
+    set({ workflowBusy: true, workflowMessage: '正在恢复历史版本...' })
+    try {
+      await api.restoreTaskVersion(projectId, output.data.taskId, versionId)
+      const { tasks } = await api.listTasks(projectId)
+      applyTasks(tasks)
+      set({ workflowMessage: `${output.data.taskCode} 已恢复所选历史版本` })
+    } catch (error) {
+      set({ workflowMessage: error instanceof Error ? error.message : '历史版本恢复失败' })
+    } finally {
+      set({ workflowBusy: false })
+    }
+  },
+
   exportLocked: async () => {
     const projectId = get().backendProjectId || globalThis.localStorage?.getItem('longy-backend-project-id')
-    const lockedTasks = get().nodes
-      .filter(node => node.type === 'output')
-      .map(node => (node as FlowOutputNode).data)
-      .filter(output => output.status === 'locked')
     if (!projectId) return
-    set({ workflowBusy: true, workflowMessage: '正在生成导出覆盖清单...' })
+    set({ workflowBusy: true, workflowMessage: '正在生成导出清单...' })
     try {
-      const preview = await api.exportPreview(projectId)
+      const selection = get().exportSelection
+      const preview = await api.exportPreview(projectId, selection.namingScheme)
       set({
         exportPreview: preview,
+        exportSelection: {
+          ...selection,
+          targetDir: selection.targetDir || preview.exportDir,
+          taskIds: preview.files.map(file => file.taskId).filter((id): id is string => Boolean(id)),
+          assetIds: preview.files.map(file => file.assetId).filter((id): id is string => Boolean(id)),
+        },
         workflowMessage: preview.coverageComplete
-          ? '必拍镜头已齐，请在导出预览中确认'
-          : `导出被拦截：缺少 ${preview.missingShotNames.length} 个必拍镜头`,
+          ? `导出清单已生成：${preview.files.length} 个文件`
+          : `导出被必拍镜头覆盖检查拦截：缺少 ${preview.missingShotNames.length} 个`,
       })
     } catch (error) {
       set({ workflowMessage: error instanceof Error ? error.message : '导出预览失败' })
@@ -1193,18 +1551,26 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
     }
   },
 
+  setExportSelection: patch => set(state => {
+    const next = { ...state.exportSelection, ...patch }
+    globalThis.localStorage?.setItem('lys-export-naming', next.namingScheme)
+    globalThis.localStorage?.setItem('lys-export-dir', next.targetDir)
+    return { exportSelection: next }
+  }),
+
   confirmExportLocked: async () => {
     const projectId = get().backendProjectId || globalThis.localStorage?.getItem('longy-backend-project-id')
     const preview = get().exportPreview
-    const lockedTasks = get().nodes
-      .filter(node => node.type === 'output')
-      .map(node => (node as FlowOutputNode).data)
-      .filter(output => output.status === 'locked')
+    const selection = get().exportSelection
     if (!projectId || !preview?.coverageComplete) return
-    set({ workflowBusy: true, workflowMessage: '正在导出锁定版本...' })
+    if (!selection.taskIds.length && !selection.assetIds.length) return
+    set({ workflowBusy: true, workflowMessage: '正在导出选中文件...' })
     try {
-      const taskIds = lockedTasks.map(output => output.taskId)
-      const result = await api.exportTasks(projectId, taskIds)
+      const result = await api.exportTasks(projectId, selection.taskIds, {
+        assetIds: selection.assetIds,
+        targetDir: selection.targetDir || preview.exportDir,
+        namingScheme: selection.namingScheme,
+      })
       const { tasks } = await api.listTasks(projectId)
       applyTasks(tasks)
       set({
@@ -1228,20 +1594,22 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
 
   closeExportResult: () => set({ exportResult: null }),
 
-  openVersionQc: async nodeId => {
+  openVersionQc: async (nodeId, versionId) => {
     const output = get().nodes.find(node => node.id === nodeId) as FlowOutputNode | undefined
     const projectId = get().backendProjectId
-    if (!output?.data.versionId || !projectId) return
+    const targetVersionId = versionId ?? output?.data.versionId
+    const historyVersion = output?.data.versions.find(version => version.id === targetVersionId)
+    if (!output || !targetVersionId || !projectId) return
     set({ workflowBusy: true, workflowMessage: '正在读取一致性 QC 报告...' })
     try {
-      const result = await api.getVersionQc(projectId, output.data.taskId, output.data.versionId)
+      const result = await api.getVersionQc(projectId, output.data.taskId, targetVersionId)
       set({
         versionQc: {
           taskId: output.data.taskId,
           taskCode: output.data.taskCode,
           taskName: output.data.taskName,
-          versionId: output.data.versionId,
-          version: output.data.version,
+          versionId: targetVersionId,
+          version: historyVersion?.version ?? output.data.version,
           score: result.score,
           passed: result.passed,
           report: result.report,

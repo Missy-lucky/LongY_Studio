@@ -119,6 +119,7 @@ input, textarea { user-select: text; }
 }
 .segment-item:hover { color: var(--text); }
 .segment-item.active { background: var(--surface); color: var(--text); font-weight: 500; box-shadow: var(--shadow); }
+.segment-item:disabled { opacity: .38; cursor: not-allowed; }
 
 /* ===== Tab（滑动指示条） ===== */
 .tabs { display: flex; gap: 0; position: relative; }
@@ -289,4 +290,137 @@ input, textarea { user-select: text; }
 .workflow-canvas .react-flow__controls,
 .workflow-canvas .react-flow__minimap {
   z-index: 4;
+}
+
+/* ===== Stage-driven workflow shell ===== */
+.workflow-console {
+  transition: width 0.22s ease-out;
+}
+
+@media (max-width: 1280px) {
+  .workflow-console:not(.workflow-console-collapsed) {
+    width: 256px;
+  }
+}
+
+.workflow-node-dimmed {
+  opacity: 0.28;
+  filter: saturate(0.45);
+  pointer-events: none;
+  transition: opacity 0.25s ease-out, filter 0.25s ease-out;
+}
+
+.workflow-node-focus {
+  opacity: 1;
+  transition: opacity 0.25s ease-out, filter 0.25s ease-out;
+}
+
+.react-flow__node.selected .workflow-node,
+.react-flow__node.selected .card.workflow-node {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-light), var(--shadow-lg);
+}
+
+.prompt-revision-drawer {
+  flex: 0 0 380px;
+  width: 380px;
+}
+
+@media (max-width: 1600px) {
+  .prompt-revision-drawer { flex-basis: 340px; width: 340px; }
+}
+
+@media (max-width: 1440px) {
+  .prompt-revision-drawer { flex-basis: 320px; width: 320px; }
+}
+
+@media (max-width: 1280px) {
+  .prompt-revision-drawer {
+    position: fixed;
+    top: 100px;
+    right: 0;
+    bottom: 48px;
+    z-index: 180;
+    width: 360px;
+    flex-basis: 360px;
+    box-shadow: var(--shadow-lg);
+  }
+}
+
+.workflow-status-dock {
+  background: color-mix(in srgb, var(--surface) 97%, transparent);
+  border-color: var(--border) !important;
+  box-shadow: 0 -10px 26px rgba(15, 23, 42, 0.08);
+}
+
+.console-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  width: 8px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.15s ease-out;
+}
+
+.console-resizer::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 2px;
+  height: 32px;
+  border-radius: 999px;
+  transform: translateY(-50%);
+  background: var(--text-3);
+  opacity: .28;
+}
+
+.console-resizer:hover,
+.console-resizer:active {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.console-resizer:hover::after,
+.console-resizer:active::after {
+  background: var(--primary);
+  opacity: 1;
+}
+
+.dock-resizer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  height: 10px;
+  cursor: row-resize;
+  background: transparent;
+  transition: background 0.15s ease-out;
+}
+
+.dock-resizer::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  width: 48px;
+  height: 3px;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  background: var(--text-3);
+  opacity: .34;
+}
+
+.dock-resizer:hover,
+.dock-resizer:active {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.dock-resizer:hover::after,
+.dock-resizer:active::after {
+  background: var(--primary);
+  opacity: 1;
 }

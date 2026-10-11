@@ -80,11 +80,36 @@ export interface FlowProcessingNode extends BaseNode {
 export type OutputStatus =
   | 'queued' | 'generating' | 'pending' | 'satisfied' | 'unsatisfied' | 'failed' | 'locked' | 'saved' | 'exported'
 
+export interface OutputVersionRecord {
+  id: string
+  version: number
+  status: string
+  cost: number
+  durationMs: number | null
+  filePath: string | null
+  qcScore: number | null
+  qcPassed: boolean | null
+  qcReportPath: string | null
+  tier?: 'draft' | 'hd'
+  provider?: string
+  createdAt?: string
+  reason?: string | null
+  note?: string
+  prompt?: string
+  negativePrompt?: string
+  referenceMode?: 'original' | 'generated'
+  baseVersionId?: string | null
+  maskPath?: string | null
+}
+
 export interface OutputNodeData {
   taskId: string
   versionId: string | null
   taskCode: string
   taskName: string
+  itemId: string | null
+  prompt: string
+  negativePrompt: string
   shotId: string | null
   shotName: string | null
   priority: ShotPriority | null
@@ -95,11 +120,15 @@ export interface OutputNodeData {
   parentOutputId: string | null
   rejectReason: string | null
   customPrompt: string | null
+  revisionNote: string | null
+  referenceMode: 'original' | 'generated'
+  baseVersionId: string | null
   cost: number
   durationMs: number | null
   tier: 'draft' | 'hd'
   qcScore: number | null
   qcPassed: boolean | null
+  versions: OutputVersionRecord[]
 }
 
 export interface FlowOutputNode extends BaseNode {

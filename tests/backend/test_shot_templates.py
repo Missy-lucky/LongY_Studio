@@ -331,9 +331,12 @@ def test_fulfilled_original_asset_is_exported():
         assert export_preview["coverageComplete"]
         asset_files = [file for file in export_preview["files"] if file["assetId"] == asset["id"]]
         assert len(asset_files) == 1
-        exported = client.post(f"/api/projects/{pid}/exports", json={"taskIds": []}).json()
+        exported = client.post(f"/api/projects/{pid}/exports", json={
+                "taskIds": [], "assetIds": [asset["id"]], "namingScheme": "compact"
+            }).json()
         assert exported["exported"] == 1
         assert exported["mapping"][0]["assetId"] == asset["id"]
+        assert not Path(exported["mapping"][0]["written"]).name.startswith(project["sku"])
         assert Path(exported["mapping"][0]["written"]).is_file()
 
 def test_single_flat_shot_plan_can_be_generated():

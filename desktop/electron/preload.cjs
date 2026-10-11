@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   maximize: () => ipcRenderer.send('window-maximize'),
   close: () => ipcRenderer.send('window-close'),
   confirmClose: () => ipcRenderer.send('window-close-confirmed'),
+  selectDirectory: () => ipcRenderer.invoke('select-directory'),
+  openPath: (targetPath) => ipcRenderer.invoke('open-path', targetPath),
   onBeforeClose: (cb) => ipcRenderer.on('before-close', () => cb()),
   onMaximized: (cb) => ipcRenderer.on('window-maximized', (_, v) => cb(v)),
 })

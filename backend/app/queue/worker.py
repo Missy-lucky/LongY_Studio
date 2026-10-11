@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from ..config import PROJECT_ROOT, settings
 from ..database import get_db, utc_now
 from ..providers import resolve_provider
-from ..providers.base import GenerateRequest
+from ..providers.base import Cancellable, GenerateRequest
 from ..services.library_loader import load_shot_templates
 from ..services.consistency_qc import run_consistency_qc, save_qc_report
 
@@ -24,6 +24,9 @@ class QueueWorker:
         )
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
+        self._paused = False
+        self._cancellations: dict[str, Cancellable] = {}
+        self._cancelled_ids: set[str] = set()
 
     def start(self) -> None:
         with self._lock:
@@ -34,9 +37,37 @@ class QueueWorker:
             )
             self._thread.start()
 
+    def pause(self) -> None:
+        with self._lock:
+            self._paused = True
+
+    def resume(self) -> None:
+        with self._lock:
+            self._paused = False
+        self.start()
+
+    @property
+    def paused(self) -> bool:
+        with self._lock:
+            return self._paused
+
+    def cancel(self, task_id: str) -> bool:
+        """Cancel a running provider call; queued tasks are cancelled by the router."""
+        with self._lock:
+            handle = self._cancellations.get(task_id)
+            self._cancelled_ids.add(task_id)
+        if handle:
+            handle.cancel()
+            return True
+        return False
+
     def _supervise(self) -> None:
         idle_cycles = 0
         while True:
+            if self.paused:
+                idle_cycles = 0
+                time.sleep(0.2)
+                continue
             rows: list[str] = []
             db = get_db()
             try:
@@ -121,23 +152,41 @@ class QueueWorker:
                     references.append(MODEL_STYLE_REFERENCE)
 
             model_reference_path = task["model_reference_path"]
+            mask_path: str | None = None
             version_id = task["current_version_id"]
+            current_version = None
             if version_id:
-                row = db.execute(
-                    "SELECT status FROM task_versions WHERE id=?", (version_id,)
+                current_version = db.execute(
+                    "SELECT status,reference_mode,base_version_id,mask_path FROM task_versions WHERE id=?",
+                    (version_id,),
                 ).fetchone()
-                if not row or row["status"] != "generating":
+                if not current_version or current_version["status"] != "generating":
                     version_id = None
+                    current_version = None
+            if current_version:
+                mask_path = current_version["mask_path"]
+            if current_version and current_version["reference_mode"] == "generated":
+                base_version_id = current_version["base_version_id"]
+                base_version = db.execute(
+                    "SELECT file_path FROM task_versions WHERE id=? AND task_id=?",
+                    (base_version_id, task_id),
+                ).fetchone() if base_version_id else None
+                if base_version and base_version["file_path"]:
+                    # The generated image is the edit base; original references remain after it
+                    # as commodity/authenticity constraints.
+                    references.insert(0, base_version["file_path"])
             if not version_id:
                 next_v = db.execute(
-                    "SELECT COALESCE(MAX(version),0)+1 v FROM task_versions WHERE task_id=?",
-                    (task_id,),
+                    "SELECT COALESCE(MAX(version),0)+1 v FROM task_versions WHERE task_id=?", (task_id,)
                 ).fetchone()["v"]
                 version_id = uuid.uuid4().hex[:12]
                 db.execute(
-                    """INSERT INTO task_versions(id,task_id,version,tier,status,provider,created_at)
-                       VALUES(?,?,?,?,?,?,?)""",
-                    (version_id, task_id, next_v, task["tier"], "generating", task["provider"], utc_now()),
+                    """INSERT INTO task_versions(
+                           id,task_id,version,tier,status,provider,prompt,negative_prompt,
+                           reference_mode,created_at)
+                       VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                    (version_id, task_id, next_v, task["tier"], "generating", task["provider"],
+                     task["prompt"], task["negative_prompt"], "original", utc_now()),
                 )
             idem = task["idempotency_key"] or uuid.uuid4().hex
             db.execute(
@@ -185,6 +234,7 @@ class QueueWorker:
             output_width=output["width"] if output else None,
             output_height=output["height"] if output else None,
             reference_paths=references,
+            mask_path=mask_path,
         )
         done = threading.Event()
         result_box: dict = {}
@@ -200,8 +250,21 @@ class QueueWorker:
             result_box["error"] = err
             done.set()
 
-        provider.generate(request, stage, complete, error, task["idempotency_key"] or uuid.uuid4().hex)
-        done.wait(timeout=300)
+        cancellable = provider.generate(request, stage, complete, error, task["idempotency_key"] or uuid.uuid4().hex)
+        with self._lock:
+            if task_id in self._cancelled_ids:
+                cancellable.cancel()
+            else:
+                self._cancellations[task_id] = cancellable
+        deadline = time.monotonic() + 300
+        while not done.wait(0.2):
+            with self._lock:
+                cancelled_now = task_id in self._cancelled_ids
+            if cancelled_now or time.monotonic() >= deadline:
+                break
+        with self._lock:
+            self._cancellations.pop(task_id, None)
+            cancelled = task_id in self._cancelled_ids
         db = get_db()
         try:
             call = db.execute(
@@ -264,8 +327,12 @@ class QueueWorker:
                 )
             else:
                 err = result_box.get("error")
-                message = getattr(err, "message", "生成超时")
-                code = getattr(err, "code", "TIMEOUT")
+                if cancelled:
+                    message = "用户取消生成"
+                    code = "USER_CANCELLED"
+                else:
+                    message = getattr(err, "message", "生成超时")
+                    code = getattr(err, "code", "TIMEOUT")
                 db.execute(
                     "UPDATE task_versions SET status='failed',error_code=?,error_message=? WHERE id=?",
                     (code, message, version_id),
@@ -282,6 +349,9 @@ class QueueWorker:
                 self._event(task["project_id"], task_id, "task.fail", f"任务 {task['code']} 失败：{message}")
         finally:
             db.close()
+            with self._lock:
+                self._cancellations.pop(task_id, None)
+                self._cancelled_ids.discard(task_id)
 
 
 worker = QueueWorker()

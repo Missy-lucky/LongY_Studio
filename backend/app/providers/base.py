@@ -19,6 +19,7 @@ class GenerateRequest:
     output_width: int | None = None
     output_height: int | None = None
     reference_paths: list[str] = field(default_factory=list)
+    mask_path: str | None = None
 
 
 @dataclass

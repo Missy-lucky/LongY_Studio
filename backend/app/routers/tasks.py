@@ -1,5 +1,8 @@
 """任务接口：规则规划、幂等提交、审核、重生成与版本恢复。"""
+import base64
+import binascii
 import json
+import re
 import uuid
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
@@ -221,6 +224,79 @@ def submit(project_id: str, body: SubmitIn) -> dict:
     return {"queued": queued, "idempotencyKey": body.idempotency_key}
 
 
+class QueueCancelIn(BaseModel):
+    task_ids: list[str] = Field(alias="taskIds")
+
+
+@router.post("/queue/pause")
+def pause_queue(project_id: str) -> dict:
+    worker.pause()
+    db = get_db()
+    try:
+        db.execute(
+            "INSERT INTO events(time,project_id,type,message) VALUES(?,?,?,?)",
+            (utc_now(), project_id, "queue.pause", "队列已暂停：不再领取新的待生成任务"),
+        )
+        db.commit()
+    finally:
+        db.close()
+    return {"paused": True}
+
+
+@router.post("/queue/resume")
+def resume_queue(project_id: str) -> dict:
+    worker.resume()
+    db = get_db()
+    try:
+        db.execute(
+            "INSERT INTO events(time,project_id,type,message) VALUES(?,?,?,?)",
+            (utc_now(), project_id, "queue.resume", "队列已恢复：继续处理待生成任务"),
+        )
+        db.commit()
+    finally:
+        db.close()
+    return {"paused": False}
+
+
+@router.post("/queue/cancel")
+def cancel_tasks(project_id: str, body: QueueCancelIn) -> dict:
+    cancelled = 0
+    running = 0
+    db = get_db()
+    try:
+        for task_id in body.task_ids:
+            row = db.execute(
+                "SELECT status,current_version_id FROM tasks WHERE id=? AND project_id=?",
+                (task_id, project_id),
+            ).fetchone()
+            if not row:
+                continue
+            if row["status"] == "generating":
+                if worker.cancel(task_id):
+                    running += 1
+                continue
+            if row["status"] != "queued":
+                continue
+            if row["current_version_id"]:
+                db.execute(
+                    "UPDATE task_versions SET status='failed',error_code=?,error_message=? WHERE id=?",
+                    ("USER_CANCELLED", "用户取消生成", row["current_version_id"]),
+                )
+            db.execute(
+                "UPDATE tasks SET status='failed',updated_at=? WHERE id=?",
+                (utc_now(), task_id),
+            )
+            db.execute(
+                "INSERT INTO events(time,project_id,task_id,type,message) VALUES(?,?,?,?,?)",
+                (utc_now(), project_id, task_id, "task.cancel", "任务在排队阶段被用户取消"),
+            )
+            cancelled += 1
+        db.commit()
+    finally:
+        db.close()
+    return {"cancelled": cancelled, "cancelling": running}
+
+
 class ReviewIn(BaseModel):
     action: str = Field(pattern="^(accept|reject|lock|unlock)$")
     reason: str | None = None
@@ -248,20 +324,108 @@ def review(project_id: str, task_id: str, body: ReviewIn) -> dict:
         db.close()
 
 
+class RegenerateIn(BaseModel):
+    prompt: str | None = None
+    negative_prompt: str | None = Field(default=None, alias="negativePrompt")
+    reason: str | None = None
+    note: str | None = None
+    reference_mode: str = Field(default="original", pattern="^(original|generated)$", alias="referenceMode")
+    base_version_id: str | None = Field(default=None, alias="baseVersionId")
+    mask_data_url: str | None = Field(default=None, alias="maskDataUrl")
+    model_config = ConfigDict(populate_by_name=True)
+
+
 @router.post("/{task_id}/regenerate")
-def regenerate(project_id: str, task_id: str) -> dict:
+def regenerate(project_id: str, task_id: str, body: RegenerateIn | None = None) -> dict:
+    revision = body or RegenerateIn()
+    prompt = revision.prompt.strip() if revision.prompt else None
+    negative_prompt = revision.negative_prompt.strip() if revision.negative_prompt else None
+    reason = revision.reason.strip() if revision.reason else None
+    note = revision.note.strip() if revision.note else None
     db = get_db()
     try:
-        row = db.execute("SELECT tier,provider FROM tasks WHERE id=? AND project_id=?", (task_id, project_id)).fetchone()
+        row = db.execute(
+            "SELECT tier,provider,prompt,negative_prompt,current_version_id FROM tasks WHERE id=? AND project_id=?",
+            (task_id, project_id),
+        ).fetchone()
         if not row:
             raise HTTPException(404, "任务不存在")
+
+        base_version_id = revision.base_version_id or row["current_version_id"]
+        if revision.reference_mode == "generated":
+            base = db.execute(
+                "SELECT id,version,file_path FROM task_versions WHERE id=? AND task_id=?",
+                (base_version_id, task_id),
+            ).fetchone() if base_version_id else None
+            if not base:
+                raise HTTPException(409, "缺少可用的基础生成版本，无法按当前图微调")
+            if not base["file_path"]:
+                raise HTTPException(409, f"基础版本 v{base['version']}还没有生成结果，无法按当前图微调")
+
+        has_revision = any((prompt, negative_prompt, reason, note))
+        if has_revision:
+            if row["current_version_id"]:
+                db.execute(
+                    """UPDATE task_versions
+                       SET status='rejected',reason=?,note=?,prompt=?,negative_prompt=?
+                       WHERE id=?""",
+                    (reason or "user-revision", note or "", prompt or row["prompt"],
+                     negative_prompt or row["negative_prompt"], row["current_version_id"]),
+                )
+            db.execute(
+                """UPDATE tasks
+                   SET prompt=COALESCE(?, prompt),
+                       negative_prompt=COALESCE(?, negative_prompt),
+                       updated_at=?
+                   WHERE id=?""",
+                (prompt, negative_prompt, utc_now(), task_id),
+            )
+
         next_v = db.execute("SELECT COALESCE(MAX(version),0)+1 v FROM task_versions WHERE task_id=?", (task_id,)).fetchone()["v"]
         vid = uuid.uuid4().hex[:12]
-        db.execute("INSERT INTO task_versions(id,task_id,version,tier,status,provider,created_at) VALUES(?,?,?,?,?,?,?)",
-                   (vid, task_id, next_v, row["tier"], "generating", row["provider"], utc_now()))
+        mask_path: Path | None = None
+        if revision.mask_data_url:
+            if revision.reference_mode != "generated":
+                raise HTTPException(409, "局部蒙版只能在“按当前图微调”模式下使用")
+            match = re.fullmatch(r"data:image/png;base64,([A-Za-z0-9+/=]+)", revision.mask_data_url)
+            if not match:
+                raise HTTPException(422, "蒙版必须是 PNG data URL")
+            try:
+                mask_bytes = base64.b64decode(match.group(1), validate=True)
+            except (ValueError, binascii.Error) as exc:
+                raise HTTPException(422, "蒙版 Base64 无效") from exc
+            if len(mask_bytes) > 8 * 1024 * 1024:
+                raise HTTPException(413, "蒙版文件过大")
+            if mask_bytes[:8] != b"\x89PNG\r\n\x1a\n":
+                raise HTTPException(422, "蒙版不是有效的 PNG 文件")
+            mask_path = settings.data_dir / "projects" / task_id / "masks" / f"{vid}.png"
+            mask_path.parent.mkdir(parents=True, exist_ok=True)
+            mask_path.write_bytes(mask_bytes)
+
+        db.execute(
+            """INSERT INTO task_versions(
+                   id,task_id,version,tier,status,provider,prompt,negative_prompt,
+                   reason,note,reference_mode,base_version_id,mask_path,created_at)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (vid, task_id, next_v, row["tier"], "generating", row["provider"],
+             prompt or row["prompt"], negative_prompt or row["negative_prompt"],
+             reason, note or "", revision.reference_mode,
+             base_version_id if revision.reference_mode == "generated" else None,
+             str(mask_path) if mask_path else None, utc_now()),
+        )
         db.execute("UPDATE tasks SET status='queued',current_version_id=?,idempotency_key=?,updated_at=? WHERE id=?", (vid, uuid.uuid4().hex, utc_now(), task_id))
+        message = f"任务创建 v{next_v}"
+        if has_revision:
+            message += "，使用用户修正提示词"
+            message += "；按原图重画" if revision.reference_mode == "original" else "；按当前生成图微调"
+            if mask_path:
+                message += "；使用局部蒙版"
+            if reason:
+                message += f"（{reason}）"
+        else:
+            message += "，历史版本保留"
         db.execute("INSERT INTO events(time,project_id,task_id,type,message) VALUES(?,?,?,?,?)",
-                   (utc_now(), project_id, task_id, "task.regenerate", f"任务创建 v{next_v}，历史版本保留"))
+                   (utc_now(), project_id, task_id, "task.regenerate", message))
         db.commit()
     finally:
         db.close()
@@ -302,9 +466,11 @@ def start_hd_repair(project_id: str, task_id: str) -> dict:
             "SELECT COALESCE(MAX(queue_index),0)+1 n FROM tasks WHERE project_id=?", (project_id,)
         ).fetchone()["n"]
         db.execute(
-            """INSERT INTO task_versions(id,task_id,version,tier,status,provider,created_at)
-               VALUES(?,?,?,?,?,?,?)""",
-            (version_id, task_id, next_v, "hd", "generating", row["provider"], utc_now()),
+            """INSERT INTO task_versions(
+                   id,task_id,version,tier,status,provider,prompt,negative_prompt,created_at)
+               VALUES(?,?,?,?,?,?,?,?,?)""",
+            (version_id, task_id, next_v, "hd", "generating", row["provider"],
+             row["prompt"], row["negative_prompt"], utc_now()),
         )
         db.execute(
             """UPDATE tasks SET tier='hd',status='queued',current_version_id=?,idempotency_key=?,

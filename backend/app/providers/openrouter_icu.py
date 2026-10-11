@@ -114,6 +114,12 @@ class OpenRouterICUProvider(ImageProvider):
             ]
             for reference in references:
                 command.extend(["--image", str(reference)])
+            if req.mask_path:
+                mask_path = Path(req.mask_path)
+                if not mask_path.is_file():
+                    fail("MASK_MISSING", f"蒙版文件不存在：{mask_path}", "重新框选局部重绘区域", False)
+                    return
+                command.extend(["--mask", str(mask_path)])
 
             env = os.environ.copy()
             env["OPENROUTER_ICU_API_KEY"] = key
@@ -177,6 +183,8 @@ class OpenRouterICUProvider(ImageProvider):
                 ]
                 for reference in repair_references:
                     repair_command.extend(["--image", str(reference)])
+                if req.mask_path:
+                    repair_command.extend(["--mask", req.mask_path])
 
                 repair_error = ""
                 for attempt in range(1, self.max_retries + 2):

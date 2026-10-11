@@ -73,6 +73,88 @@ def test_full_backend_mock_workflow(client: TestClient):
 
 
 
+def test_queue_pause_and_cancel(client: TestClient):
+    project = client.post("/api/projects", json={
+        "sku": "QUEUE-CONTROL-001", "name": "队列控制测试", "platform": "taobao",
+        "style": "简约", "budget": 100,
+    }).json()
+    pid = project["id"]
+    client.post(f"/api/projects/{pid}/items", json={
+        "name": "队列上衣", "categoryId": "top", "colorMaterial": "黑色 / 棉",
+        "sellingPoints": "保持结构", "isSellable": True,
+    })
+    planned = client.post(f"/api/projects/{pid}/tasks/plan", json={"presetId": "fast-check"}).json()
+    task_id = planned["planned"][0]["id"]
+    try:
+        assert client.post(f"/api/projects/{pid}/tasks/queue/pause").json()["paused"] is True
+        submitted = client.post(f"/api/projects/{pid}/tasks/submit", json={"taskIds": [task_id]})
+        assert submitted.json()["queued"] == 1
+
+        deadline = time.time() + 1
+        status = "queued"
+        while time.time() < deadline:
+            status = next(
+                task["status"] for task in client.get(f"/api/projects/{pid}/tasks").json()["tasks"]
+                if task["id"] == task_id
+            )
+            if status != "queued":
+                break
+            time.sleep(0.05)
+        assert status == "queued", "暂停后的队列不应领取新任务"
+
+        cancelled = client.post(f"/api/projects/{pid}/tasks/queue/cancel", json={"taskIds": [task_id]})
+        assert cancelled.json()["cancelled"] == 1
+        task = next(
+            task for task in client.get(f"/api/projects/{pid}/tasks").json()["tasks"]
+            if task["id"] == task_id
+        )
+        assert task["status"] == "failed"
+    finally:
+        client.post(f"/api/projects/{pid}/tasks/queue/resume")
+
+
+def test_regenerate_accepts_prompt_revision(client: TestClient):
+    project = client.post("/api/projects", json={
+        "sku": "REGEN-PROMPT-001", "name": "提示词修正测试", "platform": "taobao",
+        "style": "简约", "budget": 100,
+    }).json()
+    pid = project["id"]
+    client.post(f"/api/projects/{pid}/items", json={
+        "name": "修正上衣", "categoryId": "top", "colorMaterial": "黑色 / 棉",
+        "sellingPoints": "保持比例", "isSellable": True,
+    })
+    planned = client.post(f"/api/projects/{pid}/tasks/plan", json={"presetId": "fast-check"}).json()
+    assert planned["planned"]
+
+    task = client.get(f"/api/projects/{pid}/tasks").json()["tasks"][0]
+    all_task_ids = [item["id"] for item in client.get(f"/api/projects/{pid}/tasks").json()["tasks"]]
+    assert client.post(f"/api/projects/{pid}/tasks/submit", json={"taskIds": all_task_ids}).status_code == 200
+    task = next(t for t in wait_for_review(client, pid) if t["id"] == task["id"])
+    base_version_id = task["currentVersionId"]
+
+    revised = client.post(f"/api/projects/{pid}/tasks/{task['id']}/regenerate", json={
+        "prompt": task["prompt"] + "。用户修正：USER_REVISION_MARKER",
+        "negativePrompt": "颜色偏移，手部畸形",
+        "reason": "color,hands",
+        "note": "袖口改为米白色",
+        "referenceMode": "generated",
+        "baseVersionId": base_version_id,
+        "maskDataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYGBgYgBQCAIAAAA5BwOKAAAAAElFTkSuQmCC",
+    })
+    assert revised.status_code == 200
+    assert revised.json()["version"] >= 2
+
+    updated = next(t for t in wait_for_review(client, pid) if t["id"] == task["id"])
+    assert "USER_REVISION_MARKER" in updated["prompt"]
+    assert "颜色偏移" in updated["negativePrompt"]
+    revised_version = next(v for v in updated["versions"] if v["id"] == updated["currentVersionId"])
+    assert revised_version["referenceMode"] == "generated"
+    assert revised_version["baseVersionId"] == base_version_id
+    assert revised_version["maskPath"]
+    assert Path(revised_version["maskPath"]).is_file()
+    assert any("USER_REVISION_MARKER" in version.get("prompt", "") for version in updated["versions"])
+
+
 def test_legacy_v2_template_flow(client: TestClient):
     """Verify v2 models, legacy prompts, preprocessing, and QC integration."""
     from io import BytesIO

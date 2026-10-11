@@ -22,8 +22,22 @@ def safe_name(s: str) -> str:
     return re.sub(r'[\\/:*?"<>|\s]+', "-", s).strip("-") or "untitled"
 
 
+def task_filename(scheme: str, sku: str, item: str, code: str, version: int, suffix: str) -> str:
+    if scheme == "compact":
+        return f"{safe_name(item or '套装')}-{safe_name(code)}-v{version}{suffix}"
+    return f"{sku}-{safe_name(item or '套装')}-{safe_name(code)}-v{version}{suffix}"
+
+
+def asset_filename(scheme: str, sku: str, item: str, shot_id: str, suffix: str) -> str:
+    if scheme == "compact":
+        return f"{safe_name(item or '套装')}-{safe_name(shot_id)}-original{suffix}"
+    return f"{sku}-{safe_name(item or '套装')}-{safe_name(shot_id)}-original{suffix}"
+
+
 @router.get("/preview")
-def preview(project_id: str) -> dict:
+def preview(project_id: str, naming_scheme: str = "detailed") -> dict:
+    if naming_scheme not in {"detailed", "compact"}:
+        raise HTTPException(422, "naming_scheme 仅支持 detailed / compact")
     db = get_db()
     try:
         proj = db.execute("SELECT sku,name FROM projects WHERE id=?", (project_id,)).fetchone()
@@ -39,7 +53,10 @@ def preview(project_id: str) -> dict:
         seen: dict[str, int] = {}
         files = []
         for r in rows:
-            base = f"{proj['sku']}-{safe_name(r['item_name'] or '套装')}-{safe_name(r['code'])}-v{r['version']}{Path(r['file_path'] or 'x.svg').suffix}"
+            base = task_filename(
+                naming_scheme, proj["sku"], r["item_name"] or "套装", r["code"],
+                r["version"], Path(r["file_path"] or "x.svg").suffix,
+            )
             seen[base] = seen.get(base, 0) + 1
             files.append({
                 "taskId": r["id"], "assetId": None, "fileName": base,
@@ -55,9 +72,9 @@ def preview(project_id: str) -> dict:
             (project_id,),
         ).fetchall()
         for r in asset_rows:
-            base = (
-                f"{proj['sku']}-{safe_name(r['item_name'] or '套装')}-"
-                f"{safe_name(r['shot_id'])}-original{Path(r['file_path']).suffix}"
+            base = asset_filename(
+                naming_scheme, proj["sku"], r["item_name"] or "套装",
+                r["shot_id"], Path(r["file_path"]).suffix,
             )
             seen[base] = seen.get(base, 0) + 1
             files.append({
@@ -78,12 +95,16 @@ def preview(project_id: str) -> dict:
 
 
 class ExportIn(BaseModel):
-    task_ids: list[str] = Field(alias="taskIds")
+    task_ids: list[str] = Field(default_factory=list, alias="taskIds")
+    asset_ids: list[str] = Field(default_factory=list, alias="assetIds")
     target_dir: str | None = Field(default=None, alias="targetDir")
+    naming_scheme: str = Field(default="detailed", alias="namingScheme")
 
 
 @router.post("")
 def export(project_id: str, body: ExportIn) -> dict:
+    if body.naming_scheme not in {"detailed", "compact"}:
+        raise HTTPException(422, "namingScheme 仅支持 detailed / compact")
     db = get_db()
     try:
         proj = db.execute("SELECT sku,name FROM projects WHERE id=?", (project_id,)).fetchone()
@@ -119,7 +140,10 @@ def export(project_id: str, body: ExportIn) -> dict:
                     raise RuntimeError("源文件不存在")
                 folder = target / TYPE_FOLDERS[r["type"]]
                 folder.mkdir(parents=True, exist_ok=True)
-                base = f"{proj['sku']}-{safe_name(r['item_name'] or '套装')}-{safe_name(r['code'])}-v{r['version']}{src.suffix}"
+                base = task_filename(
+                    body.naming_scheme, proj["sku"], r["item_name"] or "套装",
+                    r["code"], r["version"], src.suffix,
+                )
                 out = folder / base
                 n = 1
                 while out.exists():
@@ -134,15 +158,20 @@ def export(project_id: str, body: ExportIn) -> dict:
                 exported += 1
             except Exception as exc:
                 failed.append({"taskId": r["id"], "reason": str(exc)})
-        asset_rows = db.execute(
-            """SELECT s.shot_id,s.shot_name,s.type,a.id asset_id,a.file_path,i.name item_name
-               FROM project_shot_selections s
-               JOIN assets a ON a.id=s.asset_id
-               JOIN items i ON i.id=s.item_id
-               WHERE s.project_id=? AND s.status='fulfilled' AND s.source='asset'
-               ORDER BY i.created_at,i.id,s.priority,s.shot_id""",
-            (project_id,),
-        ).fetchall()
+        asset_rows = []
+        if body.asset_ids:
+            asset_rows = db.execute(
+                """SELECT s.shot_id,s.shot_name,s.type,a.id asset_id,a.file_path,i.name item_name
+                   FROM project_shot_selections s
+                   JOIN assets a ON a.id=s.asset_id
+                   JOIN items i ON i.id=s.item_id
+                   WHERE s.project_id=? AND s.status='fulfilled' AND s.source='asset'
+                   AND a.id IN ({})
+                   ORDER BY i.created_at,i.id,s.priority,s.shot_id""".format(
+                       ",".join("?" for _ in body.asset_ids)
+                   ),
+                (project_id, *body.asset_ids),
+            ).fetchall()
         for r in asset_rows:
             try:
                 src = (settings.data_dir / r["file_path"]).resolve()
@@ -150,9 +179,9 @@ def export(project_id: str, body: ExportIn) -> dict:
                     raise RuntimeError("源素材不存在")
                 folder = target / TYPE_FOLDERS[r["type"]]
                 folder.mkdir(parents=True, exist_ok=True)
-                base = (
-                    f"{proj['sku']}-{safe_name(r['item_name'] or '套装')}-"
-                    f"{safe_name(r['shot_id'])}-original{src.suffix}"
+                base = asset_filename(
+                    body.naming_scheme, proj["sku"], r["item_name"] or "套装",
+                    r["shot_id"], src.suffix,
                 )
                 out = folder / base
                 asset_n = 1

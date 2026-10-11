@@ -1,8 +1,9 @@
 import { useMemo, useEffect, useCallback } from 'react'
 import { ReactFlow, Background, BackgroundVariant, Controls, MiniMap, useReactFlow, type Node, type Edge, type NodeTypes } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { Layers, Loader2, Play, Plus } from 'lucide-react'
+
 import { useNodeStore } from '../../stores/node-store'
+import { useWorkbench } from '../../stores/workbench-store'
 import { InputNodeComponent, ModelNodeComponent, ProcessingNodeComponent, OutputNodeComponent } from './NodeComponents'
 import { TypePicker, ModelPicker } from './TypePicker'
 import { NodeImageViewer } from './ImageViewer'
@@ -18,11 +19,13 @@ const nodeTypes: NodeTypes = {
 }
 
 export function NodeCanvas() {
+  const mode = useWorkbench(s => s.mode)
   const nodes = useNodeStore(s => s.nodes)
   const edges = useNodeStore(s => s.edges)
   const initCanvas = useNodeStore(s => s.initCanvas)
   const setTypePickerOpen = useNodeStore(s => s.setTypePickerOpen)
   const setSelected = useNodeStore(s => s.setSelected)
+  const selectedNodeId = useNodeStore(s => s.selectedNodeId)
   const generatePlan = useNodeStore(s => s.generatePlan)
   const startGeneration = useNodeStore(s => s.startGeneration)
   const generationTypes = useNodeStore(s => s.generationTypes)
@@ -44,8 +47,18 @@ export function NodeCanvas() {
     if (fitViewCounter > 0) rf.fitView({ duration: 450, padding: 0.18, maxZoom: 1 })
   }, [fitViewCounter, rf])
 
-  const rfNodes = useMemo<Node[]>(() =>
-    nodes.map(n => ({
+  useEffect(() => {
+    requestFitView()
+  }, [mode, requestFitView])
+
+  const rfNodes = useMemo<Node[]>(() => {
+    const focusedTypes = {
+      prepare: ['input', 'model'],
+      generate: ['processing', 'output'],
+      review: ['output'],
+      export: ['output'],
+    }[mode]
+    return nodes.map(n => ({
       id: n.id,
       type: n.type === 'input' ? 'inputNode'
         : n.type === 'model' ? 'modelNode'
@@ -53,8 +66,10 @@ export function NodeCanvas() {
         : 'outputNode',
       position: n.position,
       data: n.data as any,
-      selected: false,
-    })), [nodes])
+      selected: n.id === selectedNodeId,
+      className: focusedTypes.includes(n.type) ? 'workflow-node-focus' : 'workflow-node-dimmed',
+    }))
+  }, [mode, nodes, selectedNodeId])
 
   const rfEdges = useMemo<Edge[]>(() =>
     edges.map(e => ({
@@ -142,9 +157,9 @@ export function NodeCanvas() {
         fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
         onlyRenderVisibleElements
         panOnDrag
-        zoomOnScroll={false}
-        panOnScroll
-        minZoom={0.9}
+        zoomOnScroll
+        panOnScroll={false}
+        minZoom={0.15}
         maxZoom={2}
         proOptions={{ hideAttribution: true }}>
         <Background variant={BackgroundVariant.Dots} gap={24} size={1.2} color="var(--divider)"/>
@@ -157,46 +172,6 @@ export function NodeCanvas() {
             borderRadius: 8, width: 140, height: 90,
           }}/>
       </ReactFlow>
-
-      {/* Workflow controls: only canvas-specific actions live here. Project and provider commands are in the menu bar. */}
-      <div className="absolute left-4 top-4 z-10 flex w-[190px] flex-col gap-2">
-        <button onClick={() => setTypePickerOpen(true)} className="btn btn-secondary !min-h-[36px] !rounded-xl" title="添加穿搭部位节点">
-          <Plus size={14} strokeWidth={1.5}/>添加部位
-        </button>
-        <button onClick={() => void generatePlan()} disabled={workflowBusy} className="btn btn-secondary !min-h-[36px] !rounded-xl" title="按当前素材和模特生成后端任务">
-          <Layers size={14} strokeWidth={1.5}/>生成方案
-        </button>
-        <div className="rounded-xl border p-2" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
-          <div className="mb-1.5 text-[10px] font-semibold text-text-muted">生图范围</div>
-          <div className="grid grid-cols-2 gap-1">
-            {(['flat', 'partial', 'detail', 'model'] as const).map((type: ProcessType) => (
-              <label key={type} className="flex cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-1 text-[10px] transition-colors hover:bg-[var(--surface-hover)]">
-                <input
-                  type="checkbox"
-                  checked={generationTypes.includes(type)}
-                  onChange={() => toggleGenerationType(type)}
-                  className="h-3 w-3 accent-[var(--primary)]"
-                />
-                {{ flat: '平面', partial: '局部', detail: '细节', model: '模特' }[type]}
-              </label>
-            ))}
-          </div>
-        </div>
-        <button onClick={() => void startGeneration()} disabled={workflowBusy} className="btn btn-primary !min-h-[36px] !rounded-xl" title="只提交当前勾选范围内的待生成任务；真实 Provider 会先确认">
-          {workflowBusy ? <Loader2 size={14} className="anim-spin"/> : <Play size={14} strokeWidth={1.5}/>}开始流程
-        </button>
-        <button onClick={requestFitView} className="btn btn-secondary !min-h-[36px] !rounded-xl" title="只缩放视图适应内容，不改变节点位置">
-          <Layers size={14} strokeWidth={1.5}/>适应视图
-        </button>
-        <div className="rounded-lg border px-2.5 py-2 text-[10px] leading-4" style={{ background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--text-3)' }}>
-          左键或右键拖拽节点可自由调整位置；生成方案不会重排素材节点。
-        </div>
-        {workflowMessage && (
-          <div className="rounded-lg border px-2.5 py-2 text-[10px] leading-4 shadow" style={{ background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--text-2)' }}>
-            {workflowMessage}
-          </div>
-        )}
-      </div>
 
       {/* 类型选择器 + 模特选择器 */}
       <TypePicker/>

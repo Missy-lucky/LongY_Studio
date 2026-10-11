@@ -5,10 +5,11 @@ import { useHotkeys } from './hooks/useHotkeys'
 import { DesktopTitleBar } from './components/desktop/TitleBar'
 import { TopBar } from './components/layout/TopBar'
 import { AppMenuBar } from './components/layout/AppMenuBar'
-import { NavRail } from './components/layout/NavRail'
+import { WorkflowConsole } from './components/layout/WorkflowConsole'
+import { WorkflowStatusDock } from './components/layout/WorkflowStatusDock'
 import { NodeCanvas } from './components/nodes/NodeCanvas'
 import { useNodeStore } from './stores/node-store'
-import { QueueBar } from './components/layout/QueueBar'
+import { PromptRevisionDrawer } from './components/review/PromptRevisionDrawer'
 import { CommandPalette } from './components/CommandPalette'
 import { ContextMenu } from './components/ContextMenu'
 import { PlanPreview } from './components/plan/PlanPreview'
@@ -20,12 +21,20 @@ import { NewProjectDialog } from './components/common/NewProjectDialog'
 import { Lightbox } from './components/common/Lightbox'
 import { ConfirmDialog } from './components/common/ConfirmDialog'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
+import { WorkflowOnboarding } from './components/common/WorkflowOnboarding'
 import { Toasts } from './components/Toasts'
 
 export default function App() {
   useEffect(() => {
     const dark = localStorage.getItem('lys-dark') === '1'
     const accent = localStorage.getItem('lys-accent') || 'indigo'
+    const experienceMode = localStorage.getItem('lys-experience-mode')
+    if (experienceMode === 'normal' || experienceMode === 'novice') {
+      useWorkbench.getState().setExperienceMode(experienceMode)
+    }
+    if (experienceMode !== 'normal' && localStorage.getItem('lys-guide-completed') !== '1') {
+      useWorkbench.getState().setGuideOpen(true)
+    }
     const root = document.documentElement
     if (dark) root.classList.add('theme-dark')
     root.classList.add(`accent-${accent}`)
@@ -45,8 +54,10 @@ export default function App() {
     'mod+k': () => useWorkbench.getState().setPaletteOpen(!useWorkbench.getState().paletteOpen),
     'mod+p': () => useWorkbench.getState().setPaletteOpen(true),
     'mod+enter': () => {
-      const st = useWorkbench.getState()
-      if (st.mode === 'prepare') st.buildPlan()
+      const mode = useWorkbench.getState().mode
+      const nodeStore = useNodeStore.getState()
+      if (mode === 'prepare') void nodeStore.generatePlan()
+      if (mode === 'generate') void nodeStore.startGeneration()
     },
     'mod+s': () => void useNodeStore.getState().saveProjectLayout(),
     'mod+o': () => useNodeStore.getState().setProjectLibraryOpen(true),
@@ -54,7 +65,13 @@ export default function App() {
     'mod+2': () => useWorkbench.getState().setMode('generate'),
     'mod+3': () => useWorkbench.getState().setMode('review'),
     'mod+4': () => useWorkbench.getState().setMode('export'),
-    'escape': () => useWorkbench.getState().setLightbox(null),
+    '?': () => useWorkbench.getState().setGuideOpen(true),
+    'shift+?': () => useWorkbench.getState().setGuideOpen(true),
+    'escape': () => {
+      useWorkbench.getState().setLightbox(null)
+      useNodeStore.getState().openPromptRevision(null)
+      if (useWorkbench.getState().guideOpen) useWorkbench.getState().setGuideOpen(false)
+    },
   })
 
   return (
@@ -64,14 +81,15 @@ export default function App() {
         <TopBar/>
         <AppMenuBar/>
         <div className="flex min-h-0 flex-1">
-          <NavRail/>
+          <WorkflowConsole/>
           <main className="min-w-0 flex-1 anim-fade">
             <ErrorBoundary>
               <NodeCanvas/>
             </ErrorBoundary>
           </main>
+          <PromptRevisionDrawer/>
         </div>
-        <QueueBar/>
+        <WorkflowStatusDock/>
 
         <CommandPalette/>
         <ContextMenu/>
@@ -83,6 +101,7 @@ export default function App() {
         <NewProjectDialog/>
         <Lightbox/>
         <ConfirmDialog/>
+        <WorkflowOnboarding/>
         <Toasts/>
       </div>
     </ReactFlowProvider>
