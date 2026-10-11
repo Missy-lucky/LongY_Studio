@@ -35,7 +35,7 @@ class MockProvider(ImageProvider):
                 if cancelled.is_set():
                     return
                 on_stage(stage, message)
-                time.sleep(0.05)
+                time.sleep(0.02)
             if cancelled.is_set():
                 return
             if random.random() < settings.mock_failure_rate:
@@ -66,7 +66,7 @@ class MockProvider(ImageProvider):
             out_dir = settings.data_dir / "projects" / req.task_id / "generated"
             out_dir.mkdir(parents=True, exist_ok=True)
             out = out_dir / f"v-{idempotency_key[:10] or uuid.uuid4().hex[:10]}.png"
-            image.save(out, format="PNG", optimize=True)
+            image.save(out, format="PNG", optimize=False)
             on_complete(GenerateResult(str(out), self.price_per_image[req.tier], int((time.time() - started) * 1000)))
 
         threading.Thread(target=run, daemon=True, name=f"mock-{req.task_id}").start()

@@ -335,6 +335,22 @@ def detail_metrics(output: Path) -> dict[str, Any]:
     }
 
 
+def lightweight_model_qc() -> dict[str, Any]:
+    """Fast report for mock output without loading MediaPipe models."""
+    return {
+        "score": 0.35,
+        "passed": False,
+        "threshold": MODEL_THRESHOLD,
+        "faceGeometrySimilarity": None,
+        "faceAppearanceSimilarity": None,
+        "bodyProportionSimilarity": None,
+        "referencePose": None,
+        "outputPose": None,
+        "reasons": ["face_not_detected"],
+        "lightweight": True,
+    }
+
+
 def run_consistency_qc(
     output: Path,
     task_type: str,
@@ -342,6 +358,7 @@ def run_consistency_qc(
     model_reference: Path | None = None,
     *,
     enforce: bool = True,
+    deep_model_qc: bool = True,
 ) -> dict[str, Any]:
     report: dict[str, Any] = {
         "schema": QC_SCHEMA,
@@ -356,7 +373,21 @@ def run_consistency_qc(
         report["pixel"] = {"passed": False, "error": str(exc)}
         report["reasons"].append("pixel_qc_failed")
 
-    if garment_reference and garment_reference.is_file():
+    if not deep_model_qc:
+        # Mock placeholder output is not a garment photograph. Skip ORB matching and
+        # keep the report as a lightweight pixel/detail record for UI integration.
+        report["garment"] = {
+            "score": 1.0,
+            "passed": True,
+            "threshold": GARMENT_THRESHOLD,
+            "colorSimilarity": None,
+            "perceptualSimilarity": None,
+            "structureSimilarity": None,
+            "structureInliers": None,
+            "reasons": [],
+            "lightweight": True,
+        }
+    elif garment_reference and garment_reference.is_file():
         report["garment"] = garment_consistency(garment_reference, output)
         if not report["garment"]["passed"]:
             report["reasons"].append("garment_consistency_failed")
@@ -364,7 +395,12 @@ def run_consistency_qc(
         report["garment"] = {"score": None, "passed": False, "reasons": ["reference_missing"]}
 
     if task_type == "model":
-        if model_reference and model_reference.is_file():
+        if not deep_model_qc:
+            # Mock placeholders do not contain a real face. MediaPipe inference is
+            # intentionally skipped to keep local UI tests responsive and lightweight.
+            report["model"] = lightweight_model_qc()
+            report["reasons"].append("model_identity_failed")
+        elif model_reference and model_reference.is_file():
             report["model"] = model_consistency(model_reference, output)
             if not report["model"]["passed"]:
                 report["reasons"].append("model_identity_failed")

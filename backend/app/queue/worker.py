@@ -218,6 +218,7 @@ class QueueWorker:
                         garment_reference=garment_reference,
                         model_reference=model_reference,
                         enforce=task["provider"] != "mock",
+                        deep_model_qc=task["provider"] != "mock",
                     )
                     qc_report["tier"] = task["tier"]
                     qc_report["pipeline"] = ["base-generation", "hd-detail-repair"] if task["tier"] == "hd" else ["base-generation"]
