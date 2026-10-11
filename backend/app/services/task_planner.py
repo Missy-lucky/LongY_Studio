@@ -136,7 +136,7 @@ def plan_tasks(
             items[0] if items else None,
         )
 
-        def add(item, shot: dict, model=None, output: dict | None = None):
+        def add(item, shot: dict, model=None):
             nonlocal max_code
             max_code += 1
             task_type = shot["type"]
@@ -192,20 +192,19 @@ def plan_tasks(
             expanded = _expand_template_shots(template, attributes)
             visible = [shot for shot in expanded if shot["priority"] in allowed_priorities]
             skipped += len(expanded) - len(visible)
-            output_by_type = template["defaults"]["outputByType"]
 
             for shot in visible:
                 if shot["type"] == "model":
                     continue
-                add(item, shot, output=output_by_type[shot["type"]])
+                add(item, shot)
 
-            # 旧路径按“模特 × 角度”展开；模板路径按镜头展开，并轮换使用已选模特身份。
+            # 模特镜头仍按模板展开；多个已选模特身份按镜头轮换，避免破坏镜头清单。
             if item["id"] == (primary_item["id"] if primary_item else None):
                 model_shots = [shot for shot in visible if shot["type"] == "model"]
                 if model_shots:
                     for index, shot in enumerate(model_shots):
                         model = models[index % len(models)] if models else None
-                        add(item, shot, model, output_by_type["model"])
+                        add(item, shot, model)
 
         # 模板缺失时的旧版模特兜底逻辑。
         if primary_item and primary_item["category_id"] not in templates:
