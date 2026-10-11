@@ -1,5 +1,50 @@
 # 修改日志
 
+## v0.6.1 — 工程规范与结构治理（2026-10-11）
+
+### 工程
+- 在 `D:\LongY_Studio` 初始化 Git，建立 `main` 分支和 `v0.6.0` 基线。
+- 清理 C 盘旧副本，后续只以 D 盘工程为唯一工作目录。
+- 将 OpenRouter ICU CLI 复制到项目内 `tools/`，移除对个人 Codex 技能目录的运行时依赖。
+- 将过早的桌面分发实验保存到 `spike/distribution` 分支，主线暂停打包方向，避免当前阶段复杂化。
+
+### 代码规范
+- 新增 `docs/coding-standards.md`，明确：
+  - backend / frontend / desktop / asset-library / storage 的职责边界。
+  - Python、TypeScript、React、JSON 规则资产的命名规则。
+  - 文件大小阈值与拆分方向。
+  - API 字段、运行数据、Git 提交和测试要求。
+- 新增 `scripts/check-code-quality.ps1` 与 `scripts/check_code_quality.py`：
+  - 检查 Python 语法与命名。
+  - 检查 React / TypeScript 命名。
+  - 检查根目录层级。
+  - 检查品类、套图模板、提示词模板 JSON 完整性。
+  - 扫描个人绝对路径与疑似 API Key。
+  - 检查 Git 中是否误跟踪运行数据。
+  - 串联后端测试与前端构建。
+- `scripts/build.ps1` 改为调用统一质量检查入口。
+
+### 结构重构
+- `legacy_qc.py` 更名为 `image_qc.py`，职责命名更直观。
+- `canvas/nodes.tsx` 更名为 `canvas/CanvasNodes.tsx`，符合组件命名。
+- 新增 `frontend/src/workflow/`：
+  - `node-layout.ts`：节点自动布局。
+  - `task-sync.ts`：后端任务状态到节点状态的映射。
+  - `project-restore.ts`：项目恢复时的图结构构建。
+- `node-store.ts` 从约 950 行降至约 800 行以内，纯逻辑移出 store；该文件仍标记为历史大文件，后续继续拆分。
+
+### 规则资产
+- 纳入 33 个品类的 `asset-library/shot-templates/` 套图模板。
+- 质量检查会校验：
+  - 品类与模板一一对应。
+  - shot id 唯一。
+  - 任务类型与优先级合法。
+  - 条件镜头引用的属性已声明。
+  - 参考图角色存在。
+
+---
+
+
 ## v0.6.0 — 交互、布局与项目入口优化（2026-10-11）
 
 ### 交互命中与关闭行为
