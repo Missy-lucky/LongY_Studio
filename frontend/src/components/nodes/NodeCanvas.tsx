@@ -125,7 +125,7 @@ export function NodeCanvas() {
 
   return (
     <div
-      className="relative h-full w-full"
+      className="workflow-canvas relative h-full w-full"
       onContextMenu={event => event.preventDefault()}
       onPointerDownCapture={onCanvasPointerDown}>
       <ReactFlow

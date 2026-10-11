@@ -269,3 +269,26 @@ input, textarea { user-select: text; }
 }
 .node-action-button:hover { transform: translateY(-1px); }
 .node-action-button:active { transform: scale(.96); }
+
+/* React Flow renders nodes after edges in the DOM. Keep the semantic layer order
+   explicit: connection lines must stay visible even when crossing output cards. */
+.workflow-canvas .react-flow__edges {
+  z-index: 2 !important;
+  pointer-events: none !important;
+}
+.workflow-canvas .react-flow__nodes {
+  z-index: 0 !important;
+}
+.workflow-canvas .react-flow__edge,
+.workflow-canvas .react-flow__edge-path {
+  pointer-events: none !important;
+}
+.workflow-canvas .react-flow__edge-path {
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.72));
+}
+.workflow-canvas .react-flow__attribution,
+.workflow-canvas .react-flow__controls,
+.workflow-canvas .react-flow__minimap {
+  z-index: 4;
+}
