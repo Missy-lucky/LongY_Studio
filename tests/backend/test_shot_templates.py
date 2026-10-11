@@ -272,3 +272,66 @@ def test_custom_shot_can_be_added_and_planned():
             db.close()
         custom_ready = [item for item in client.get(f"/api/projects/{pid}/exports/preview").json()["coverage"] if item["shotId"] == "custom-reflective-strip"]
         assert custom_ready and custom_ready[0]["ready"]
+
+def test_fulfilled_original_asset_is_exported():
+    import uuid
+    from io import BytesIO
+
+    from PIL import Image
+
+    with TestClient(app) as client:
+        suffix = uuid.uuid4().hex[:6]
+        project = client.post("/api/projects", json={
+            "sku": f"ASSET-{suffix}", "name": "原图抵扣导出测试", "platform": "taobao",
+            "style": "简约", "budget": 10,
+        }).json()
+        pid = project["id"]
+        item = client.post(f"/api/projects/{pid}/items", json={
+            "name": "卫衣", "categoryId": "hoodie", "attributes": {"hasHood": True, "hasZip": False},
+        }).json()
+        image = Image.new("RGB", (80, 100), "#223344")
+        buffer = BytesIO()
+        image.save(buffer, format="PNG")
+        uploaded = client.post(
+            f"/api/projects/{pid}/assets/import",
+            files={"files": ("original.png", buffer.getvalue(), "image/png")},
+        ).json()
+        assert uploaded["imported"] == 1
+        asset = client.get(f"/api/projects/{pid}/assets").json()["assets"][0]
+        assert client.post(f"/api/projects/{pid}/assets/{asset['id']}/confirm", json={
+            "itemId": item["id"], "categoryId": "hoodie", "viewSlot": "front",
+        }).json()["ok"]
+
+        preview = client.post(f"/api/projects/{pid}/tasks/plan/preview", json={
+            "provider": "mock", "modelIds": ["chinese-grand"],
+        }).json()
+        plan_item = preview["items"][0]
+        selections = []
+        for shot in plan_item["shots"]:
+            if shot["priority"] != "P0":
+                continue
+            fulfilled = shot["shotId"] == "flat-front"
+            selections.append({
+                "itemId": plan_item["itemId"],
+                "shotId": shot["shotId"],
+                "shotName": shot["shotName"],
+                "type": shot["type"],
+                "priority": shot["priority"],
+                "required": shot["required"],
+                "isCustom": shot["isCustom"],
+                "status": "fulfilled" if fulfilled else "waived",
+                "source": "asset" if fulfilled else "manual",
+                "assetId": asset["id"] if fulfilled else None,
+                "reason": "" if fulfilled else "本次使用外部成片",
+                "promptHints": shot["promptHints"],
+            })
+        assert client.put(f"/api/projects/{pid}/tasks/shot-selections", json={"selections": selections}).status_code == 200
+
+        export_preview = client.get(f"/api/projects/{pid}/exports/preview").json()
+        assert export_preview["coverageComplete"]
+        asset_files = [file for file in export_preview["files"] if file["assetId"] == asset["id"]]
+        assert len(asset_files) == 1
+        exported = client.post(f"/api/projects/{pid}/exports", json={"taskIds": []}).json()
+        assert exported["exported"] == 1
+        assert exported["mapping"][0]["assetId"] == asset["id"]
+        assert Path(exported["mapping"][0]["written"]).is_file()

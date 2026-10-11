@@ -42,8 +42,27 @@ def preview(project_id: str) -> dict:
             base = f"{proj['sku']}-{safe_name(r['item_name'] or '套装')}-{safe_name(r['code'])}-v{r['version']}{Path(r['file_path'] or 'x.svg').suffix}"
             seen[base] = seen.get(base, 0) + 1
             files.append({
-                "taskId": r["id"], "fileName": base, "folder": TYPE_FOLDERS[r["type"]],
-                "conflict": seen[base] > 1,
+                "taskId": r["id"], "assetId": None, "fileName": base,
+                "folder": TYPE_FOLDERS[r["type"]], "conflict": seen[base] > 1,
+            })
+        asset_rows = db.execute(
+            """SELECT s.shot_id,s.shot_name,s.type,a.id asset_id,a.file_path,i.name item_name
+               FROM project_shot_selections s
+               JOIN assets a ON a.id=s.asset_id
+               JOIN items i ON i.id=s.item_id
+               WHERE s.project_id=? AND s.status='fulfilled' AND s.source='asset'
+               ORDER BY i.created_at,i.id,s.priority,s.shot_id""",
+            (project_id,),
+        ).fetchall()
+        for r in asset_rows:
+            base = (
+                f"{proj['sku']}-{safe_name(r['item_name'] or '套装')}-"
+                f"{safe_name(r['shot_id'])}-original{Path(r['file_path']).suffix}"
+            )
+            seen[base] = seen.get(base, 0) + 1
+            files.append({
+                "taskId": None, "assetId": r["asset_id"], "fileName": base,
+                "folder": TYPE_FOLDERS[r["type"]], "conflict": seen[base] > 1,
             })
         root = settings.data_dir / "exports" / f"{proj['sku']}-{safe_name(proj['name'])}"
         coverage = project_shot_coverage(project_id)
@@ -115,6 +134,43 @@ def export(project_id: str, body: ExportIn) -> dict:
                 exported += 1
             except Exception as exc:
                 failed.append({"taskId": r["id"], "reason": str(exc)})
+        asset_rows = db.execute(
+            """SELECT s.shot_id,s.shot_name,s.type,a.id asset_id,a.file_path,i.name item_name
+               FROM project_shot_selections s
+               JOIN assets a ON a.id=s.asset_id
+               JOIN items i ON i.id=s.item_id
+               WHERE s.project_id=? AND s.status='fulfilled' AND s.source='asset'
+               ORDER BY i.created_at,i.id,s.priority,s.shot_id""",
+            (project_id,),
+        ).fetchall()
+        for r in asset_rows:
+            try:
+                src = (settings.data_dir / r["file_path"]).resolve()
+                if not src.is_file():
+                    raise RuntimeError("源素材不存在")
+                folder = target / TYPE_FOLDERS[r["type"]]
+                folder.mkdir(parents=True, exist_ok=True)
+                base = (
+                    f"{proj['sku']}-{safe_name(r['item_name'] or '套装')}-"
+                    f"{safe_name(r['shot_id'])}-original{src.suffix}"
+                )
+                out = folder / base
+                asset_n = 1
+                while out.exists():
+                    out = folder / f"{Path(base).stem}-{asset_n}{src.suffix}"
+                    asset_n += 1
+                shutil.copy2(src, out)
+                db.execute(
+                    """INSERT INTO export_asset_files(
+                           id,batch_id,asset_id,shot_id,file_path,original_name,created_at
+                       ) VALUES(?,?,?,?,?,?,?)""",
+                    (uuid.uuid4().hex[:12], batch_id, r["asset_id"], r["shot_id"], str(out), out.name, now()),
+                )
+                mapping.append({"assetId": r["asset_id"], "written": str(out)})
+                exported += 1
+            except Exception as exc:
+                failed.append({"assetId": r["asset_id"], "reason": str(exc)})
+
         db.execute("INSERT INTO events(time,project_id,type,message) VALUES(?,?,?,?)",
                    (now(), project_id, "export.done", f"导出完成：{exported} 张成功，{len(failed)} 张失败"))
         db.commit()

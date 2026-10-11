@@ -124,18 +124,18 @@ export function ExportResultDialog() {
           </div>
           <div className="space-y-1.5">
             {result.files.map(file => (
-              <div key={file.taskId} className="rounded-lg border px-3 py-2 text-[11px]" style={{ borderColor: 'var(--border)', background: 'var(--bg-2)' }}>
+              <div key={file.taskId || file.assetId || file.written} className="rounded-lg border px-3 py-2 text-[11px]" style={{ borderColor: 'var(--border)', background: 'var(--bg-2)' }}>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-text-secondary">{file.taskId}</span>
+                  <span className="text-text-secondary">{file.taskId || file.assetId}</span>
                   <span className="text-success">成功</span>
                 </div>
                 <div className="mt-1 truncate font-mono text-[10px] text-text-muted">{file.written}</div>
               </div>
             ))}
             {result.failed.map(file => (
-              <div key={`${file.taskId}-failed`} className="rounded-lg border px-3 py-2 text-[11px]" style={{ borderColor: 'var(--error)', background: 'rgba(239,68,68,0.06)' }}>
+              <div key={`${file.taskId || file.assetId || file.reason}-failed`} className="rounded-lg border px-3 py-2 text-[11px]" style={{ borderColor: 'var(--error)', background: 'rgba(239,68,68,0.06)' }}>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-text-secondary">{file.taskId}</span>
+                  <span className="text-text-secondary">{file.taskId || file.assetId}</span>
                   <span className="text-error">失败</span>
                 </div>
                 <div className="mt-1 text-[10px] text-text-muted">{file.reason}</div>
@@ -220,3 +220,4 @@ export function ProjectSettingsDialog() {
     </div>
   )
 }
+

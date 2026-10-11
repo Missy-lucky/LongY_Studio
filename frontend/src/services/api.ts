@@ -140,7 +140,8 @@ export interface ExportCoverageItem {
 }
 
 export interface ExportPreviewFile {
-  taskId: string
+  taskId: string | null
+  assetId?: string | null
   fileName: string
   folder: string
   conflict: boolean
@@ -240,8 +241,8 @@ export const api = {
   exportTasks: (projectId: string, taskIds: string[]) =>
     request<{
       exported: number
-      failed: Array<{ taskId: string; reason: string }>
-      mapping: Array<{ taskId: string; written: string }>
+      failed: Array<{ taskId?: string; assetId?: string; reason: string }>
+      mapping: Array<{ taskId?: string; assetId?: string; written: string }>
       batchId: string
       targetDir: string
     }>(`/projects/${projectId}/exports`, {

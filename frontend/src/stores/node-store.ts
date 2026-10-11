@@ -32,8 +32,8 @@ export interface RealGenerationConfirm {
 
 export interface ExportResultState {
   exported: number
-  failed: Array<{ taskId: string; reason: string }>
-  files: Array<{ taskId: string; written: string }>
+  failed: Array<{ taskId?: string; assetId?: string; reason: string }>
+  files: Array<{ taskId?: string; assetId?: string; written: string }>
   targetDir: string
 }
 
@@ -1006,10 +1006,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
       .filter(node => node.type === 'output')
       .map(node => (node as FlowOutputNode).data)
       .filter(output => output.status === 'locked')
-    if (!projectId || !lockedTasks.length) {
-      set({ workflowMessage: '请先审核并锁定至少一张图片' })
-      return
-    }
+    if (!projectId) return
     set({ workflowBusy: true, workflowMessage: '正在生成导出覆盖清单...' })
     try {
       const preview = await api.exportPreview(projectId)
@@ -1033,7 +1030,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
       .filter(node => node.type === 'output')
       .map(node => (node as FlowOutputNode).data)
       .filter(output => output.status === 'locked')
-    if (!projectId || !preview?.coverageComplete || !lockedTasks.length) return
+    if (!projectId || !preview?.coverageComplete) return
     set({ workflowBusy: true, workflowMessage: '正在导出锁定版本...' })
     try {
       const taskIds = lockedTasks.map(output => output.taskId)
