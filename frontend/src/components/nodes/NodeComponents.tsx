@@ -50,20 +50,20 @@ export function InputNodeComponent({ data, id }: { data: FlowInputNode['data']; 
   const isEmpty = !data.image
 
   return (
-    <div className={clsx('group card relative w-[160px] overflow-hidden !rounded-xl', isEmpty && 'border-dashed')}
+    <div className={clsx('group card workflow-node relative w-[220px] overflow-hidden !rounded-2xl', isEmpty && 'border-dashed')}
       style={{
-        background: 'var(--surface)',
-        borderColor: isEmpty ? 'var(--text-3)' : 'var(--border)',
-        opacity: isEmpty ? 0.6 : 1,
+        borderColor: isEmpty ? 'color-mix(in srgb, var(--text-3) 70%, transparent)' : undefined,
+        opacity: isEmpty ? 0.74 : 1,
       }}>
       <Handle type="source" position={Position.Right} className={portStyle}/>
 
       {/* 头部 */}
       <div className="flex items-center justify-between px-3 pt-2.5 pb-1">
         <button onClick={() => setChangeTypeTargetNodeId(id)}
-          className="flex !min-h-[36px] !min-w-[36px] items-center gap-1.5 rounded-md px-1 text-xs font-medium transition-colors hover:bg-[var(--surface-hover)]"
+          className="flex !min-h-[36px] items-center gap-2 rounded-md px-1 text-[13px] font-medium transition-colors hover:bg-[var(--surface-hover)]"
           style={{ color: 'var(--primary)' }}>
           {data.categoryName}
+          {data.image?.remote && <span className="h-2 w-2 rounded-full bg-emerald-500" title="素材已入库"/>}
         </button>
         <div className="flex gap-0.5">
           {data.attributeOptions.length > 0 && (
@@ -91,7 +91,7 @@ export function InputNodeComponent({ data, id }: { data: FlowInputNode['data']; 
       </div>
 
       {/* 图片区域 */}
-      <div className="relative mx-2.5 mb-2.5 aspect-[4/5] overflow-hidden rounded-lg"
+      <div className="relative mx-3 mb-3 aspect-[4/5] overflow-hidden rounded-xl"
         style={{ background: 'var(--bg-2)', cursor: data.image ? 'zoom-in' : 'pointer' }}
         onClick={() => { if (!data.image) handleUpload() }}
         onDoubleClick={event => {
@@ -108,19 +108,13 @@ export function InputNodeComponent({ data, id }: { data: FlowInputNode['data']; 
             className="pointer-events-none h-full w-full object-contain"/>
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-1.5">
-            <Upload size={16} strokeWidth={1.5} style={{ color: 'var(--text-3)' }}/>
-            <span className="text-[10px]" style={{ color: 'var(--text-3)' }}>点击上传</span>
-          </div>
-        )}
-        {/* Backend status */}
-        {data.image?.remote && (
-          <div className="absolute right-1.5 top-1.5 rounded-full bg-black/55 p-1">
-            <Check size={10} strokeWidth={2.5} className="text-emerald-400"/>
+            <Upload size={18} strokeWidth={1.5} style={{ color: 'var(--text-3)' }}/>
+            <span className="text-[11px]" style={{ color: 'var(--text-3)' }}>点击上传</span>
           </div>
         )}
         {data.status === 'error' && (
-          <div className="absolute inset-x-1.5 bottom-1.5 rounded bg-red-500/85 px-1.5 py-1 text-[9px] leading-3 text-white">
-            {data.image?.error || 'Backend import failed'}
+          <div className="absolute inset-x-2 bottom-2 rounded-md bg-red-500/88 px-2 py-1.5 text-[10px] leading-4 text-white">
+            {data.image?.error || '后端导入失败'}
           </div>
         )}
         {/* 图片操作 */}
@@ -135,15 +129,15 @@ export function InputNodeComponent({ data, id }: { data: FlowInputNode['data']; 
                   subtitle: `${data.categoryName} · 原始输入素材`,
                 })
               }}
-              className="flex h-9 w-9 items-center justify-center rounded-md bg-black/60 text-white transition-colors hover:bg-black/80"
+              className="node-action-button bg-black/45 text-white hover:bg-black/65"
               title="双击或点击放大查看">
-              <Maximize2 size={11} strokeWidth={1.8}/>
+              <Maximize2 size={13} strokeWidth={1.8}/>
             </button>
             <button
               onClick={event => { event.stopPropagation(); handleUpload() }}
-              className="flex h-9 w-9 items-center justify-center rounded-md bg-black/60 text-white transition-colors hover:bg-black/80"
+              className="node-action-button bg-black/45 text-white hover:bg-black/65"
               title="替换素材">
-              <RefreshCw size={11} strokeWidth={1.8}/>
+              <RefreshCw size={13} strokeWidth={1.8}/>
             </button>
           </div>
         )}
@@ -199,15 +193,24 @@ export function ModelNodeComponent({ data, id }: { data: FlowModelNode['data']; 
   const setModelPickerOpen = useNodeStore(s => s.setModelPickerOpen)
   const openImageViewer = useNodeStore(s => s.openImageViewer)
   return (
-    <div className="card relative w-[160px] overflow-hidden !rounded-xl"
-      style={{ background: 'var(--surface)', borderColor: 'rgba(139,92,246,0.3)' }}>
+    <div className="card workflow-node relative w-[220px] overflow-hidden !rounded-2xl"
+      style={{ borderColor: 'rgba(139,92,246,0.32)' }}>
       <Handle type="source" position={Position.Right} className={portStyle}/>
-      <div className="flex items-center justify-between px-3 pt-2.5 pb-1">
-        <span className="flex items-center gap-1.5 text-xs font-medium" style={{ color: '#8B5CF6' }}>
-          <Sparkles size={11} strokeWidth={1.5}/>模特身份
-        </span>
+      <div className="flex items-start justify-between gap-2 px-3 pt-3 pb-2">
+        <div className="min-w-0">
+          <span className="flex items-center gap-1.5 text-[11px] font-medium" style={{ color: '#8B5CF6' }}>
+            <Sparkles size={12} strokeWidth={1.5}/>模特身份
+          </span>
+          <div className="mt-1 truncate text-[13px] font-semibold" style={{ color: 'var(--text)' }}>{data.styleName}</div>
+        </div>
+        <button onClick={() => setModelPickerOpen(true)}
+          className="node-action-button"
+          style={{ backgroundColor: 'rgba(139,92,246,.10)', borderColor: 'rgba(139,92,246,.24)', color: '#8B5CF6' }}
+          title="切换模特身份" aria-label={`切换${data.styleName}`}>
+          <RefreshCw size={13} strokeWidth={1.7}/>
+        </button>
       </div>
-      <div className="relative mx-2.5 mb-2.5 aspect-[2/3] w-[calc(100%-20px)] cursor-zoom-in overflow-hidden rounded-lg"
+      <div className="relative mx-3 mb-3 aspect-[2/3] w-[calc(100%-24px)] cursor-zoom-in overflow-hidden rounded-xl"
         style={{ background: 'var(--bg-2)' }}
         onDoubleClick={event => {
           event.stopPropagation()
@@ -229,17 +232,8 @@ export function ModelNodeComponent({ data, id }: { data: FlowModelNode['data']; 
               <span className="text-lg">👗</span>
               <span className="text-[10px] font-medium" style={{ color: '#8B5CF6' }}>{data.styleName}</span>
             </div>}
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent px-2 py-1.5">
-          <span className="block truncate text-[10px] font-medium text-white">{data.styleName}</span>
-          <span className="text-[8px] text-white/70">完整定稿参考 · 不裁切</span>
-        </div>
-        <button
-          onClick={() => setModelPickerOpen(true)}
-          className="flex !min-h-[36px] !min-w-[44px] items-center justify-center rounded-md bg-black/55 px-2 text-[9px] text-white transition-colors hover:bg-black/75"
-          title="切换模特身份">
-          切换
-        </button>
       </div>
+      <div className="px-3 pb-3 text-[10px]" style={{ color: 'var(--text-3)' }}>完整定稿参考 · 不裁切</div>
     </div>
   )
 }
@@ -252,17 +246,17 @@ export function ProcessingNodeComponent({ data }: { data: FlowProcessingNode['da
     : 'var(--text-3)'
 
   return (
-    <div className="card relative w-[180px] !rounded-xl"
-      style={{ background: 'var(--surface)', borderColor: data.status !== 'idle' ? statusColor : 'var(--border)' }}>
+    <div className="card workflow-node workflow-node--processing relative w-[240px] !rounded-2xl"
+      style={{ borderColor: data.status !== 'idle' ? statusColor : undefined }}>
       <Handle type="target" position={Position.Left} className={portStyle}/>
       <Handle type="source" position={Position.Right} className={portStyle}/>
 
-      <div className="px-3 py-2.5">
+      <div className="px-4 py-3.5">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold" style={{ color: 'var(--text)' }}>{data.title}</span>
+          <span className="text-[13px] font-semibold" style={{ color: 'var(--text)' }}>{data.title}</span>
           <span className="ml-auto h-2 w-2 rounded-full" style={{ background: statusColor }}/>
         </div>
-        <div className="mt-2 space-y-1 text-[10px]" style={{ color: 'var(--text-3)' }}>
+        <div className="mt-2.5 space-y-1.5 text-[11px]" style={{ color: 'var(--text-3)' }}>
           <div className="flex justify-between">
             <span>模型</span><span className="font-mono">mock</span>
           </div>
@@ -284,6 +278,18 @@ export function ProcessingNodeComponent({ data }: { data: FlowProcessingNode['da
 }
 
 // ============ 输出节点 ============
+const OUTPUT_STATUS_TEXT: Record<string, string> = {
+  pending: '待审核',
+  satisfied: '已满意',
+  unsatisfied: '已拒绝',
+  generating: '生成中',
+  failed: '失败',
+  locked: '已锁定',
+  saved: '已保存',
+  exported: '已导出',
+  queued: '排队中',
+}
+
 export function OutputNodeComponent({ data, id }: { data: FlowOutputNode['data']; id: string }) {
   const markSatisfied = useNodeStore(s => s.markSatisfied)
   const markUnsatisfied = useNodeStore(s => s.markUnsatisfied)
@@ -297,16 +303,13 @@ export function OutputNodeComponent({ data, id }: { data: FlowOutputNode['data']
   const status = data.status
   const color = STATUS_COLORS[status]
   const thumbnailUrl = data.thumbnail
+  const statusText = OUTPUT_STATUS_TEXT[status] ?? '未知'
 
   return (
-    <div className={clsx('group card relative overflow-hidden !rounded-xl', 'w-[160px]')}
-      style={{
-        background: 'var(--surface)',
-        borderColor: status !== 'queued' ? color : 'var(--border)',
-        boxShadow: status === 'satisfied' ? '0 0 0 1px #22C55E' :
-                   status === 'locked' ? '0 0 0 1px #0EA5E9' :
-                   status === 'unsatisfied' ? '0 0 0 1px #EF4444' : undefined,
-      }}>
+    <div
+      className="group card workflow-node relative w-[220px] overflow-hidden !rounded-2xl"
+      style={{ borderColor: status !== 'queued' ? color : undefined }}
+    >
       <Handle type="target" position={Position.Left} className={portStyle}/>
       {status === 'unsatisfied' && <Handle type="source" position={Position.Right} className={portStyle}/>}
 
@@ -319,9 +322,10 @@ export function OutputNodeComponent({ data, id }: { data: FlowOutputNode['data']
           openImageViewer({
             src: data.thumbnail,
             title: data.taskName,
-            subtitle: `${data.taskCode} · v${data.version} · 双击缩放`,
+            subtitle: `${data.taskCode} · 第 ${data.version} 版 · 双击缩放`,
           })
-        }}>
+        }}
+      >
         {data.thumbnail ? (
           <img src={data.thumbnail} alt={data.taskName} draggable={false}
             className="pointer-events-none h-full w-full object-contain"/>
@@ -329,57 +333,15 @@ export function OutputNodeComponent({ data, id }: { data: FlowOutputNode['data']
           <div className="skeleton absolute inset-0"/>
         ) : (
           <div className="flex h-full items-center justify-center">
-            <ImageIcon size={16} strokeWidth={1.5} style={{ color: 'var(--text-3)', opacity: 0.3 }}/>
+            <ImageIcon size={20} strokeWidth={1.5} style={{ color: 'var(--text-3)', opacity: 0.3 }}/>
           </div>
         )}
 
-        {/* 状态角标 */}
-        <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded-full px-1.5 py-0.5"
-          style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}>
-          <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }}/>
-          <span className="text-[9px] font-medium" style={{ color }}>
-            {status === 'pending' ? '待审核' :
-             status === 'satisfied' ? '满意' :
-             status === 'unsatisfied' ? '不满意' :
-             status === 'generating' ? '生成中' :
-             status === 'failed' ? '失败' :
-             status === 'locked' ? '已锁定' :
-             status === 'saved' ? '已保存' :
-             status === 'exported' ? '已导出' : '排队'}
-          </span>
-        </div>
-
-        {/* QC 与档位 */}
-        <div className="absolute left-1.5 top-8 flex flex-col items-start gap-1">
-          <span className="rounded px-1 py-0.5 font-mono text-[8px] uppercase"
-            style={{ background: 'rgba(0,0,0,0.48)', color: data.tier === 'hd' ? '#38BDF8' : '#D1D5DB' }}>
-            {data.tier === 'hd' ? '高清修复' : '草稿'}
-          </span>
-          {data.qcScore != null && (
-            <button
-              onClick={event => {
-                event.stopPropagation()
-                void openVersionQc(id)
-              }}
-              className="flex !min-h-[20px] items-center rounded px-1 py-0.5 font-mono text-[8px] transition-colors hover:bg-black/70"
-              style={{
-                background: 'rgba(0,0,0,0.48)',
-                color: data.qcPassed ? '#22C55E' : '#F59E0B',
-              }}
-              title="查看一致性质检报告">
-              质检 {Math.round(data.qcScore * 100)}
-            </button>
-          )}
-        </div>
-
-        {/* 版本号 */}
-        {data.version > 1 && (
-          <span className="absolute right-1.5 top-1.5 rounded px-1 py-0.5 font-mono text-[9px]"
-            style={{ background: 'rgba(0,0,0,0.5)', color: '#F59E0B' }}>
-            v{data.version}
-          </span>
-        )}
-
+        <span
+          className="absolute left-2 top-2 h-2.5 w-2.5 rounded-full border"
+          style={{ background: color, borderColor: 'rgba(255,255,255,.72)', boxShadow: '0 0 0 3px rgba(15,23,42,.10)' }}
+          title={statusText}
+        />
         {thumbnailUrl && (
           <button
             onClick={event => {
@@ -387,95 +349,127 @@ export function OutputNodeComponent({ data, id }: { data: FlowOutputNode['data']
               openImageViewer({
                 src: thumbnailUrl,
                 title: data.taskName,
-                subtitle: `${data.taskCode} · v${data.version} · 双击缩放`,
+                subtitle: `${data.taskCode} · 第 ${data.version} 版 · 双击缩放`,
               })
             }}
-            className="absolute right-1.5 top-1.5 flex h-9 w-9 items-center justify-center rounded-md bg-black/60 text-white opacity-0 transition-opacity hover:opacity-100 focus:opacity-100 group-hover:opacity-100"
-            title="双击或点击放大查看">
-            <Maximize2 size={11} strokeWidth={1.8}/>
+            className="node-action-button absolute right-2 top-2 bg-black/40 text-white opacity-0 transition-opacity hover:bg-black/60 focus:opacity-100 group-hover:opacity-100"
+            title="双击或点击放大查看"
+            aria-label={`放大查看${data.taskCode}`}
+          >
+            <Maximize2 size={13} strokeWidth={1.8}/>
           </button>
         )}
+      </div>
+
+      <div className="px-3 pb-3 pt-2.5">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium"
+            style={{ backgroundColor: `${color}1c`, color }}>{statusText}</span>
+          <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px]"
+            style={{
+              backgroundColor: data.tier === 'hd' ? 'rgba(56,189,248,.12)' : 'rgba(100,116,139,.12)',
+              color: data.tier === 'hd' ? '#0284C7' : 'var(--text-3)',
+            }}>
+            {data.tier === 'hd' ? '高清修复' : '草稿'}
+          </span>
+          {data.qcScore != null && (
+            <button
+              onClick={event => { event.stopPropagation(); void openVersionQc(id) }}
+              className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium transition-colors"
+              style={{
+                backgroundColor: data.qcPassed ? 'rgba(34,197,94,.12)' : 'rgba(245,158,11,.14)',
+                color: data.qcPassed ? '#16A34A' : '#B45309',
+              }}
+              title="查看一致性质检报告"
+            >
+              质检 {Math.round(data.qcScore * 100)}
+            </button>
+          )}
+          {data.version > 1 && <span className="ml-auto shrink-0 font-mono text-[9px] text-text-muted">v{data.version}</span>}
+        </div>
+
+        <div className="mt-1.5 truncate text-[12px] font-medium" style={{ color: 'var(--text)' }} title={data.shotName || data.taskName}>
+          {data.shotName || data.taskName}
+        </div>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <span className="truncate font-mono text-[10px]" style={{ color: 'var(--text-3)' }}>
+            {data.taskCode} · ¥{data.cost}
+          </span>
+          <button
+            onClick={event => { event.stopPropagation(); removeOutput(id) }}
+            className="node-action-button !h-8 !w-8"
+            style={{ color: 'var(--text-3)' }}
+            title="从本次方案移除"
+            aria-label={`移除${data.taskCode}`}
+          >
+            <Trash2 size={12} strokeWidth={1.6}/>
+          </button>
+        </div>
 
         {status === 'pending' && (
-          <div className="absolute inset-x-1.5 bottom-1.5 flex gap-1">
-            <button onClick={event => { event.stopPropagation(); void markSatisfied(id) }}
-              className="btn flex-1 !min-h-[36px] !rounded-lg !text-xs"
-              style={{ background: 'rgba(34,197,94,0.82)', color: 'white' }}>
-              <Check size={12} strokeWidth={2}/>满意
+          <div className="mt-2 flex justify-end gap-2">
+            <button
+              onClick={event => { event.stopPropagation(); void markSatisfied(id) }}
+              className="node-action-button"
+              style={{ backgroundColor: 'rgba(34,197,94,.10)', borderColor: 'rgba(34,197,94,.24)', color: '#16A34A' }}
+              title="满意"
+              aria-label={`满意${data.taskCode}`}
+            >
+              <Check size={15} strokeWidth={2.2}/>
             </button>
-            <button onClick={event => { event.stopPropagation(); void markUnsatisfied(id) }}
-              className="btn flex-1 !min-h-[36px] !rounded-lg !text-xs"
-              style={{ background: 'rgba(239,68,68,0.82)', color: 'white' }}>
-              <X size={12} strokeWidth={2}/>不满意
+            <button
+              onClick={event => { event.stopPropagation(); void markUnsatisfied(id) }}
+              className="node-action-button"
+              style={{ backgroundColor: 'rgba(239,68,68,.10)', borderColor: 'rgba(239,68,68,.24)', color: '#DC2626' }}
+              title="不满意"
+              aria-label={`不满意${data.taskCode}`}
+            >
+              <X size={15} strokeWidth={2.2}/>
             </button>
           </div>
         )}
         {status === 'satisfied' && (
-          <div className="absolute inset-x-1.5 bottom-1.5 flex gap-1">
-            <button onClick={event => { event.stopPropagation(); void lockOutput(id) }}
-              className="btn flex-1 !min-h-[36px] !rounded-lg !text-xs"
-              style={{ background: 'rgba(14,165,233,0.86)', color: 'white' }}>
-              <Lock size={12} strokeWidth={2}/>锁定
+          <div className="mt-2 flex justify-end gap-2">
+            <button
+              onClick={event => { event.stopPropagation(); void lockOutput(id) }}
+              className="node-action-button"
+              style={{ backgroundColor: 'rgba(14,165,233,.10)', borderColor: 'rgba(14,165,233,.24)', color: '#0284C7' }}
+              title="锁定版本"
+              aria-label={`锁定${data.taskCode}`}
+            >
+              <Lock size={14} strokeWidth={1.9}/>
             </button>
             {data.tier === 'draft' && (
-              <button onClick={event => { event.stopPropagation(); void startHdRepair(id) }}
-                className="btn flex-1 !min-h-[36px] !rounded-lg !text-xs"
-                style={{ background: 'rgba(56,189,248,0.88)', color: 'white' }}
-                title="两阶段高清：基础图 + 细节修复">
-                <Sparkles size={12} strokeWidth={1.8}/>高清修复
+              <button
+                onClick={event => { event.stopPropagation(); void startHdRepair(id) }}
+                className="node-action-button"
+                style={{ backgroundColor: 'rgba(56,189,248,.10)', borderColor: 'rgba(56,189,248,.26)', color: '#0284C7' }}
+                title="两阶段高清：基础生成 + 细节修复"
+                aria-label={`高清修复${data.taskCode}`}
+              >
+                <Sparkles size={14} strokeWidth={1.8}/>
               </button>
             )}
           </div>
         )}
-        {status === 'failed' && (
-          <button onClick={event => { event.stopPropagation(); void regenerate(id) }}
-            className="btn absolute inset-x-1.5 bottom-1.5 !min-h-[36px] !rounded-lg !text-xs"
-            style={{ background: 'rgba(239,68,68,0.86)', color: 'white' }}>
-            <RefreshCw size={12} strokeWidth={1.5}/>重试生成
-          </button>
-        )}
-        {status === 'unsatisfied' && (
-          <button onClick={event => { event.stopPropagation(); void regenerate(id) }}
-            className="btn absolute inset-x-1.5 bottom-1.5 !min-h-[36px] !rounded-lg !text-xs"
-            style={{ background: 'rgba(245,158,11,0.88)', color: 'white' }}>
-            <RefreshCw size={12} strokeWidth={1.5}/>重生成 v{data.version + 1}
-          </button>
-        )}
-      </div>
-
-      {/* 底部信息 */}
-      <div className="px-2.5 py-2">
-        <div className="flex items-center gap-1.5">
-          {data.priority && (
-            <span
-              className="shrink-0 rounded px-1 py-0.5 text-[8px] font-semibold"
-              style={{ background: `${PRIORITY_COLORS[data.priority]}22`, color: PRIORITY_COLORS[data.priority] }}
-            >
-              {data.priority}
-            </span>
-          )}
-          <span className="truncate text-[11px] font-medium" style={{ color: 'var(--text)' }}>
-            {data.shotName || data.taskName}
-          </span>
-        </div>
-        <div className="mt-0.5 flex items-center justify-between">
-          <span className="font-mono text-[9px]" style={{ color: 'var(--text-3)' }}>{data.taskCode}</span>
-          <div className="flex items-center gap-1">
-            <span className="font-mono text-[9px]" style={{ color: 'var(--text-3)' }}>¥{data.cost}</span>
+        {(status === 'failed' || status === 'unsatisfied') && (
+          <div className="mt-2 flex justify-end">
             <button
-              onClick={() => removeOutput(id)}
-              className="flex h-9 w-9 items-center justify-center rounded-md opacity-50 transition-all hover:bg-[var(--surface-hover)] hover:opacity-100"
-              style={{ color: 'var(--text-3)' }}
-              title="从本次方案移除"
-              aria-label={`移除${data.taskCode}`}>
-              <Trash2 size={11} strokeWidth={1.6}/>
+              onClick={event => { event.stopPropagation(); void regenerate(id) }}
+              className="node-action-button"
+              style={{
+                backgroundColor: status === 'failed' ? 'rgba(239,68,68,.10)' : 'rgba(245,158,11,.12)',
+                borderColor: status === 'failed' ? 'rgba(239,68,68,.24)' : 'rgba(245,158,11,.26)',
+                color: status === 'failed' ? '#DC2626' : '#B45309',
+              }}
+              title={status === 'failed' ? '重试生成' : `重生成第 ${data.version + 1} 版`}
+              aria-label={status === 'failed' ? `重试${data.taskCode}` : `重生成${data.taskCode}`}
+            >
+              <RefreshCw size={14} strokeWidth={1.8}/>
             </button>
           </div>
-        </div>
+        )}
       </div>
-
     </div>
   )
 }
-
-

@@ -6,7 +6,7 @@ import type {
 import { DEFAULT_INPUT_NODES, MODEL_STYLES, findCategory } from '../data/preset-categories'
 import { PROCESS_ORDER, PROCESS_TITLES } from '../data/process-templates'
 import { api, type ConsistencyQcReport, type ExportPreview, type ProviderInfo, type RemoteProject, type RemoteTask, type ShotPlanPreview, type ShotSelectionInput } from '../services/api'
-import { inputPosition, modelPosition, outputPosition } from '../workflow/node-layout'
+import { inputPosition, modelPosition, organizeNodes, outputPosition } from '../workflow/node-layout'
 import { applyProjectLayout, buildProjectLayout } from '../workflow/layout-persistence'
 import { buildRestoredProjectGraph } from '../workflow/project-restore'
 import { activeBackendStatus, syncNodesWithTasks } from '../workflow/task-sync'
@@ -308,7 +308,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
       target: procNodes.find(proc => proc.data.processType === 'model')!.id,
       edgeType: 'model',
     })
-    set({ nodes: [...inputNodes, modelNode, ...procNodes], edges, canvasInitialized: true })
+    set({ nodes: organizeNodes([...inputNodes, modelNode, ...procNodes]), edges, canvasInitialized: true })
   },
 
   resetCanvas: () => {
@@ -524,10 +524,23 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
         image: null, status: 'empty',
       },
     }
+    const inputCount = get().nodes.filter(node => node.type === 'input').length + 1
+    const nextNodes = [
+      ...get().nodes.map(node => node.type === 'model'
+        ? { ...node, position: modelPosition(inputCount) }
+        : node),
+      newNode,
+    ]
     const newEdges = get().nodes
       .filter(n => n.type === 'processing')
       .map(proc => ({ id: nid('edge'), source: newNode.id, target: proc.id, edgeType: 'material' as const }))
-    set(state => ({ nodes: [...state.nodes, newNode], edges: [...state.edges, ...newEdges], typePickerOpen: false, changeTypeTargetNodeId: null, layoutDirty: true }))
+    set(state => ({
+      nodes: organizeNodes(nextNodes),
+      edges: [...state.edges, ...newEdges],
+      typePickerOpen: false,
+      changeTypeTargetNodeId: null,
+      layoutDirty: true,
+    }))
     void get().loadInputAttributes(newNode.id)
   },
 
@@ -795,7 +808,10 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
         return { id: nid('edge'), source: proc!.id, target: output.id, edgeType: 'output' as const }
       })
       set(state => ({
-        nodes: [...state.nodes.filter(node => node.type !== 'output'), ...outputNodes].map(node => {
+        nodes: organizeNodes([
+          ...state.nodes.filter(node => node.type !== 'output'),
+          ...outputNodes,
+        ]).map(node => {
           if (node.type !== 'processing') return node
           const proc = node as FlowProcessingNode
           const count = tasks.filter(task => task.type === proc.data.processType).length

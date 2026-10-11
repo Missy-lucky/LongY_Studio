@@ -64,8 +64,14 @@ export function NodeCanvas() {
       animated: e.animated,
       style: {
         stroke: EDGE_COLORS[e.edgeType],
-        strokeWidth: 1.5,
-        opacity: e.edgeType === 'material' ? 0.5 : 1,
+        strokeWidth: 1.35,
+        opacity: ({
+          material: 0.30,
+          model: 0.48,
+          output: 0.42,
+          review: 0.28,
+          regen: 0.34,
+        } as const)[e.edgeType],
       },
     })), [edges])
 
@@ -130,6 +136,7 @@ export function NodeCanvas() {
         onNodeContextMenu={onNodeContextMenu}
         nodesDraggable
         elementsSelectable
+        elevateEdgesOnSelect
         onNodeDoubleClick={(_, node) => rf.fitView({ nodes: [{ id: node.id }], duration: 300, maxZoom: 1.2 })}
         fitView
         fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
@@ -137,7 +144,7 @@ export function NodeCanvas() {
         panOnDrag
         zoomOnScroll={false}
         panOnScroll
-        minZoom={0.7}
+        minZoom={0.9}
         maxZoom={2}
         proOptions={{ hideAttribution: true }}>
         <Background variant={BackgroundVariant.Dots} gap={24} size={1.2} color="var(--divider)"/>
@@ -203,6 +210,3 @@ export function NodeCanvas() {
     </div>
   )
 }
-
-
-
