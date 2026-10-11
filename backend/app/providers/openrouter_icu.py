@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import PROJECT_ROOT, settings
-from ..services.legacy_qc import inspect_image, normalize_flat_output
+from ..services.image_qc import inspect_image, normalize_flat_output
 from .base import (
     Cancellable,
     GenerateError,

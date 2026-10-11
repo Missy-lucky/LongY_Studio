@@ -11,6 +11,7 @@
 | `backend/` | FastAPI 接口、业务服务、队列、Provider 适配、仓储层 | 写 React 组件或样式 |
 | `database/` | SQL 迁移、查询、数据库文档 | 写业务流程；保存用户图片 |
 | `asset-library/` | 可版本化的品类、规范、模特、提示词模板、生成预设 | 保存用户上传原图或生成结果 |
+| `frontend/src/workflow/` | 前端纯逻辑：节点布局、任务状态映射、项目恢复图构建 | 放组件、_hooks 或直接 API 调用 |
 | `shared/` | 前后端共享类型、事件契约、JSON Schema | 放运行时实现 |
 | `storage/` | SQLite、用户素材、缓存、日志、导出结果 | 提交到 Git；存放源码 |
 | `tests/` |后端集成测试、前端测试、端到端测试 | 依赖真实外部 API 扣费 |
@@ -66,3 +67,8 @@ pm run build` 输出到 `temp/build/frontend`；只有打包脚本会临时生�
 
 
 
+
+
+## 代码规范
+
+命名、层级、文件大小和新增文件要求见 `docs/coding-standards.md`。提交前运行 `scripts/check-code-quality.ps1`。

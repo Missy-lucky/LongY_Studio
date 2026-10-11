@@ -107,6 +107,14 @@ export interface FlowEdgeData {
   label?: string
 }
 
+export interface FlowEdge {
+  id: string
+  source: string
+  target: string
+  edgeType: EdgeType
+  animated?: boolean
+}
+
 // ============ 预设类型 ============
 export type CategoryGroup = '上装' | '下装' | '鞋履' | '配饰' | '包袋' | '其他'
 

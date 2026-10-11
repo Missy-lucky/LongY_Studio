@@ -3,7 +3,7 @@ import { ReactFlow, Background, BackgroundVariant, Controls, MiniMap, useReactFl
 import '@xyflow/react/dist/style.css'
 import { useWorkbench } from '../../stores/workbench-store'
 import { EmptyState } from '../common/EmptyState'
-import { TaskNode, MaterialNode, GroupNode, PlanNode, GateNode, ExportNode, type TaskNodeData, type MaterialNodeData, type GroupNodeData, type PlanNodeData, type GateNodeData, type ExportNodeData } from './nodes'
+import { TaskNode, MaterialNode, GroupNode, PlanNode, GateNode, ExportNode, type TaskNodeData, type MaterialNodeData, type GroupNodeData, type PlanNodeData, type GateNodeData, type ExportNodeData } from './CanvasNodes'
 import { TYPE_META } from '../../lib/status'
 import type { TaskType } from '../../types/domain'
 

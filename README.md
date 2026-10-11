@@ -92,7 +92,8 @@ cd ..
 ## 已生成 Windows 安装包\n\n以下文件位于 `temp/build/release/`：\n\n- `LongY Studio Setup 0.1.0.exe`\n- `LongY Studio 0.1.0.exe`（便携版）\n\n说明：当前安装包包含前端原型与 Mock 流程，不内嵌 Python FastAPI sidecar；后端需按 `scripts/dev.ps1` 单独启动。\n\n## 测试与构建
 
 ```powershell
-.\scripts\build.ps1     # 后端测试 + 前端类型检查与生产构建
+.\scripts\check-code-quality.ps1 # 结构 / 命名 / JSON 规则 + 后端测试 + 前端构建
+.\scripts\build.ps1              # 兼容入口，内部调用质量检查
 .\scripts\package.ps1   # Electron Windows 安装包，输出 temp/build/release
 ```
 

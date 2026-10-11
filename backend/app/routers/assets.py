@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ..config import PROJECT_ROOT, settings
 from ..database import get_db
-from ..services.legacy_qc import (
+from ..services.image_qc import (
     image_dimensions,
     inspect_image,
     prepare_plan_view_inputs,

@@ -1,24 +1,20 @@
 import { create } from 'zustand'
 import type {
-  AnyFlowNode, FlowInputNode, FlowModelNode, FlowProcessingNode, FlowOutputNode,
-  UploadedImage, OutputStatus, ProcessType,
+  AnyFlowNode, FlowEdge, FlowInputNode, FlowModelNode, FlowProcessingNode, FlowOutputNode,
+  UploadedImage, ProcessType,
 } from '../types/node-system'
 import { DEFAULT_INPUT_NODES, MODEL_STYLES, findCategory } from '../data/preset-categories'
-import { api, type ProviderInfo, type RemoteAsset, type RemoteProject, type RemoteTask } from '../services/api'
+import { PROCESS_ORDER, PROCESS_TITLES } from '../data/process-templates'
+import { api, type ProviderInfo, type RemoteProject, type RemoteTask } from '../services/api'
+import { organizeNodes, outputPosition } from '../workflow/node-layout'
+import { buildRestoredProjectGraph } from '../workflow/project-restore'
+import { activeBackendStatus, syncNodesWithTasks } from '../workflow/task-sync'
 
 let uid = 0
 const nid = (p: string) => `${p}-${Date.now().toString(36)}-${(uid++).toString(36)}`
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 const revokeThumbnail = (url?: string | null) => {
   if (url?.startsWith('blob:')) setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
-
-export interface FlowEdge {
-  id: string
-  source: string
-  target: string
-  edgeType: 'material' | 'model' | 'output' | 'review' | 'regen'
-  animated?: boolean
 }
 
 export interface NodeImageViewer {
@@ -99,13 +95,6 @@ export interface NodeStoreState {
   setModelPickerOpen: (open: boolean) => void
 }
 
-const PROC_TITLES: Record<ProcessType, string> = {
-  flat: '平面图生成',
-  detail: '细节图生成',
-  partial: '局部图生成',
-  model: '模特图生成',
-}
-const DEFAULT_PROC_TYPES: ProcessType[] = ['flat', 'detail', 'partial', 'model']
 const modelReferenceUrl = (modelId?: string) => modelId ? `/api/library/models/${modelId}/reference?variant=preview` : ''
 
 let projectPromise: Promise<string> | null = null
@@ -134,76 +123,14 @@ function ensureProject(): Promise<string> {
   return projectPromise
 }
 
-function outputStatus(status: string): OutputStatus {
-  if (status === 'review') return 'pending'
-  if (status === 'accepted') return 'satisfied'
-  if (status === 'locked') return 'locked'
-  if (status === 'exported') return 'exported'
-  if (status === 'rejected') return 'unsatisfied'
-  if (status === 'failed') return 'failed'
-  return 'generating'
-}
-
-function activeBackendStatus(status: string): boolean {
-  return ['planned', 'cached', 'queued', 'generating'].includes(status)
-}
-
-function taskVersion(task: RemoteTask) {
-  if (!task.currentVersionId) return undefined
-  return task.versions.find(version => version.id === task.currentVersionId)
-}
-
 function applyTasks(tasks: RemoteTask[]): void {
   const projectId = useNodeStore.getState().backendProjectId
   if (!projectId) return
-  const taskById = new Map(tasks.map(task => [task.id, task]))
-  useNodeStore.setState(state => {
-    const withOutputs = state.nodes.map(node => {
-      if (node.type !== 'output') return node
-      const output = node as FlowOutputNode
-      const task = taskById.get(output.data.taskId)
-      if (!task) return node
-      const version = taskVersion(task)
-      return {
-        ...node,
-        data: {
-          ...output.data,
-          status: outputStatus(task.status),
-          versionId: task.currentVersionId,
-          version: version?.version ?? output.data.version,
-          cost: version?.cost ?? output.data.cost,
-          durationMs: version?.durationMs ?? output.data.durationMs,
-          thumbnail: version?.filePath
-            ? `/api/projects/${projectId}/tasks/${task.id}/versions/${version.id}/file`
-            : null,
-        },
-      }
-    })
-    const outputData = withOutputs
-      .filter(node => node.type === 'output')
-      .map(node => (node as FlowOutputNode).data)
-    const nodes = withOutputs.map(node => {
-      if (node.type !== 'processing') return node
-      const proc = node as FlowProcessingNode
-      const outputs = outputData.filter(item => item.imageType === proc.data.processType)
-      const running = outputs.some(item => ['queued', 'generating'].includes(item.status))
-      const failed = outputs.length > 0 && outputs.every(item => item.status === 'failed')
-      const done = outputs.length > 0 && outputs.every(item => !['queued', 'generating'].includes(item.status))
-      return {
-        ...node,
-        data: {
-          ...proc.data,
-          status: running ? 'running' : failed ? 'failed' : done ? 'done' : proc.data.status,
-          actualCost: outputs.reduce((sum, item) => sum + item.cost, 0),
-        },
-      }
-    })
-    return {
-      nodes,
-      edges: state.edges.map(edge => ({ ...edge, animated: false })),
-      workflowMessage: `后端任务同步完成：${tasks.length} 个任务`,
-    }
-  })
+  useNodeStore.setState(state => ({
+    nodes: syncNodesWithTasks(tasks, projectId, state.nodes),
+    edges: state.edges.map(edge => ({ ...edge, animated: false })),
+    workflowMessage: `后端任务同步完成：${tasks.length} 个任务`,
+  }))
 }
 async function pollTasks(runId: number): Promise<void> {
   while (true) {
@@ -231,60 +158,6 @@ async function pollTasks(runId: number): Promise<void> {
       return
     }
   }
-}
-
-const OUTPUT_COLUMNS = 3
-const outputGap = (type: ProcessType) => type === 'model' ? 330 : 270
-const outputPosition = (type: ProcessType, index: number, baseY: number) => ({
-  x: 760 + (index % OUTPUT_COLUMNS) * 200,
-  y: baseY + Math.floor(index / OUTPUT_COLUMNS) * outputGap(type),
-})
-
-function organizeNodes(nodes: AnyFlowNode[]): AnyFlowNode[] {
-  const inputCount = nodes.filter(node => node.type === 'input').length
-  const outputCounts = new Map<ProcessType, number>()
-  nodes.forEach(node => {
-    if (node.type !== 'output') return
-    const type = (node as FlowOutputNode).data.imageType
-    outputCounts.set(type, (outputCounts.get(type) ?? 0) + 1)
-  })
-
-  // 处理节点纵向分区的高度必须容纳它自己的输出网格，避免下一组输出覆盖上一组。
-  const processY = new Map<ProcessType, number>()
-  let cursorY = 40
-  DEFAULT_PROC_TYPES.forEach(type => {
-    processY.set(type, cursorY)
-    const rows = Math.ceil((outputCounts.get(type) ?? 0) / OUTPUT_COLUMNS)
-    const nodeHeight = type === 'model' ? 300 : 245
-    const blockHeight = rows === 0 ? 210 : (rows - 1) * outputGap(type) + nodeHeight
-    cursorY += Math.max(220, blockHeight + 85)
-  })
-
-  const counts = new Map<ProcessType, number>()
-  return nodes.map(node => {
-    if (node.type === 'input') {
-      const index = nodes.filter(item => item.type === 'input').indexOf(node)
-      return { ...node, position: { x: 60, y: 40 + index * 280 } }
-    }
-    if (node.type === 'model') {
-      return { ...node, position: { x: 60, y: 40 + inputCount * 280 + 20 } }
-    }
-    if (node.type === 'processing') {
-      const process = node as FlowProcessingNode
-      return { ...node, position: { x: 430, y: processY.get(process.data.processType) ?? 40 } }
-    }
-    const output = node as FlowOutputNode
-    const count = counts.get(output.data.imageType) ?? 0
-    counts.set(output.data.imageType, count + 1)
-    return {
-      ...node,
-      position: outputPosition(
-        output.data.imageType,
-        count,
-        processY.get(output.data.imageType) ?? 40,
-      ),
-    }
-  })
 }
 
 export const useNodeStore = create<NodeStoreState>((set, get) => ({
@@ -338,12 +211,12 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
       },
     }
 
-    const procNodes: FlowProcessingNode[] = DEFAULT_PROC_TYPES.map((pt, i) => ({
+    const procNodes: FlowProcessingNode[] = PROCESS_ORDER.map((pt, i) => ({
       id: nid('proc'), type: 'processing' as const,
       position: { x: 440, y: 40 + i * 220 },
       collapsed: false,
       data: {
-        processType: pt, title: PROC_TITLES[pt],
+        processType: pt, title: PROCESS_TITLES[pt],
         status: 'idle' as const, estimatedCount: 0, estimatedCost: 0, actualCost: 0,
       },
     }))
@@ -398,93 +271,20 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
         api.listAssets(projectId),
         api.listTasks(projectId),
       ])
-      const storedModelId = globalThis.localStorage?.getItem('longy-selected-model')
-      const selectedStyle = MODEL_STYLES.find(style => style.id === storedModelId) ?? MODEL_STYLES[0]
-
-      const inputNodes: FlowInputNode[] = assets.map((asset: RemoteAsset, index: number) => {
-        const category = findCategory(asset.categoryId || 'top') ?? findCategory('top')!
-        return {
-          id: `asset-${asset.id}`, type: 'input' as const,
-          position: { x: 60, y: 40 + index * 280 }, collapsed: false,
-          data: {
-            categoryId: category.id, categoryName: category.name, categoryGroup: category.group,
-            status: 'confirmed' as const,
-            image: {
-              id: asset.id,
-              fileName: asset.filePath.split('/').pop() || asset.id,
-              thumbnailUrl: `/api/projects/${projectId}/assets/${asset.id}/file`,
-              width: asset.width, height: asset.height, fileSize: asset.size,
-              remote: { projectId, itemId: asset.itemId || '', assetId: asset.id },
-            },
-          },
-        }
+      const graph = buildRestoredProjectGraph({
+        projectId,
+        assets,
+        tasks,
+        selectedModelId: globalThis.localStorage?.getItem('longy-selected-model'),
+        createId: nid,
       })
-      const blankInputs: FlowInputNode[] = inputNodes.length ? [] : DEFAULT_INPUT_NODES.map((catId, index) => {
-        const category = findCategory(catId)!
-        return {
-          id: nid('input'), type: 'input' as const, position: { x: 60, y: 40 + index * 250 },
-          collapsed: false,
-          data: { categoryId: category.id, categoryName: category.name, categoryGroup: category.group, image: null, status: 'empty' as const },
-        }
-      })
-      const allInputs = [...inputNodes, ...blankInputs]
-      const modelNode: FlowModelNode = {
-        id: 'model-locked', type: 'model' as const,
-        position: { x: 60, y: 40 + allInputs.length * 280 + 20 }, collapsed: false,
-        data: {
-          styleId: selectedStyle.id, styleName: selectedStyle.name, styleGroup: selectedStyle.group,
-          modelImage: modelReferenceUrl(selectedStyle.modelId), locked: true,
-        },
-      }
-      const procNodes: FlowProcessingNode[] = DEFAULT_PROC_TYPES.map((processType, index) => ({
-        id: `proc-${processType}`, type: 'processing' as const,
-        position: { x: 430, y: 40 + index * 350 }, collapsed: false,
-        data: {
-          processType, title: PROC_TITLES[processType], status: 'idle' as const,
-          estimatedCount: 0, estimatedCost: 0, actualCost: 0,
-        },
-      }))
-      const counts = new Map<ProcessType, number>()
-      const outputNodes: FlowOutputNode[] = tasks.map(task => {
-        const count = counts.get(task.type) ?? 0
-        counts.set(task.type, count + 1)
-        const proc = procNodes.find(node => node.data.processType === task.type)!
-        const version = task.versions.find(item => item.id === task.currentVersionId)
-        return {
-          id: `task-${task.id}`, type: 'output' as const,
-          position: outputPosition(task.type, count, proc.position.y), collapsed: false,
-          data: {
-            taskId: task.id, versionId: task.currentVersionId, taskCode: task.code, taskName: task.name,
-            imageType: task.type, status: outputStatus(task.status), thumbnail: version?.filePath
-              ? `/api/projects/${projectId}/tasks/${task.id}/versions/${version.id}/file`
-              : null,
-            version: version?.version ?? 1, parentOutputId: null, rejectReason: null, customPrompt: null,
-            cost: version?.cost ?? 0, durationMs: version?.durationMs ?? null,
-          },
-        }
-      })
-      procNodes.forEach(proc => {
-        const rows = tasks.filter(task => task.type === proc.data.processType)
-        proc.data.status = rows.length ? 'done' : 'idle'
-        proc.data.estimatedCount = rows.length
-        proc.data.estimatedCost = rows.reduce((sum, task) => sum + task.estimatedCost, 0)
-        proc.data.actualCost = rows.reduce((sum, task) => sum + (task.versions.at(-1)?.cost ?? 0), 0)
-      })
-      const edges: FlowEdge[] = []
-      allInputs.forEach(input => procNodes.forEach(proc => edges.push({
-        id: `edge-${input.id}-${proc.id}`, source: input.id, target: proc.id, edgeType: 'material',
-      })))
-      edges.push({ id: 'edge-model', source: modelNode.id, target: procNodes.find(node => node.data.processType === 'model')!.id, edgeType: 'model' })
-      outputNodes.forEach(output => edges.push({
-        id: `edge-output-${output.data.taskId}`,
-        source: procNodes.find(node => node.data.processType === output.data.imageType)!.id,
-        target: output.id, edgeType: 'output',
-      }))
       const taskProvider = tasks[0]?.provider
       globalThis.localStorage?.setItem('longy-backend-project-id', projectId)
       set({
-        nodes: organizeNodes([...allInputs, modelNode, ...procNodes, ...outputNodes]), edges,
-        canvasInitialized: true, backendProjectId: projectId, projectMeta: project,
+        ...graph,
+        canvasInitialized: true,
+        backendProjectId: projectId,
+        projectMeta: project,
         providerId: taskProvider === 'openrouter-icu' ? 'openrouter-icu' : 'mock',
         workflowMessage: `已恢复项目 ${project.sku}：${assets.length} 张素材，${tasks.length} 个任务`,
       })
@@ -999,6 +799,3 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
   setTypePickerOpen: open => set({ typePickerOpen: open }),
   setModelPickerOpen: open => set({ modelPickerOpen: open }),
 }))
-
-
-
