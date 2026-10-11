@@ -1,0 +1,27 @@
+{
+  "id": "shoes",
+  "name": "鞋子",
+  "group": "鞋履",
+  "icon": "Footprints",
+  "bodyZone": "足部",
+  "layerOrder": 10,
+  "requiredViews": [
+    "正面",
+    "侧面",
+    "底部",
+    "细节"
+  ],
+  "defaultDetailTasks": [
+    "鞋头",
+    "鞋带",
+    "鞋底",
+    "车线"
+  ],
+  "defaultPartialTasks": [
+    "脚部展示"
+  ],
+  "modelPromptHints": "鞋子出现在足部，完整展示商品比例与搭配关系",
+  "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+  "isSellableByDefault": true,
+  "builtin": true
+}

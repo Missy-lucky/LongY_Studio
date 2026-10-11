@@ -1,0 +1,13 @@
+{
+  "id": "model-b",
+  "name": "模特 B · 甜美挂",
+  "pose": "站姿 / 坐姿",
+  "styles": [
+    "甜美",
+    "校园"
+  ],
+  "skinTone": "自然暖白",
+  "hair": "栗色卷发",
+  "licenseNote": "授权待补确认字段",
+  "enabled": false
+}

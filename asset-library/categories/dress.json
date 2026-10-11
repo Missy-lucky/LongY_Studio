@@ -1,0 +1,28 @@
+{
+  "id": "dress",
+  "name": "连衣裙",
+  "group": "下装",
+  "icon": "Shirt",
+  "bodyZone": "下肢",
+  "layerOrder": 20,
+  "requiredViews": [
+    "正面",
+    "反面",
+    "侧面",
+    "细节",
+    "材质"
+  ],
+  "defaultDetailTasks": [
+    "领口",
+    "腰部",
+    "裙摆",
+    "背面"
+  ],
+  "defaultPartialTasks": [
+    "全身展示"
+  ],
+  "modelPromptHints": "连衣裙出现在下肢，完整展示商品比例与搭配关系",
+  "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+  "isSellableByDefault": true,
+  "builtin": true
+}

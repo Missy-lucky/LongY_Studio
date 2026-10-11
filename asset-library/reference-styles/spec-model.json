@@ -1,0 +1,13 @@
+{
+  "id": "spec-model",
+  "type": "model",
+  "name": "模特全身规范",
+  "composition": "全身，头部留白",
+  "background": "影棚灰墙",
+  "lighting": "蝴蝶光",
+  "ratio": "9:16",
+  "applicableCategories": [
+    "*"
+  ],
+  "isDefault": true
+}

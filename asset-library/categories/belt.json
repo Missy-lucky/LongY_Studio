@@ -1,0 +1,27 @@
+{
+  "id": "belt",
+  "name": "腰带",
+  "group": "配饰",
+  "icon": "Circle",
+  "bodyZone": "腰部",
+  "layerOrder": 40,
+  "requiredViews": [
+    "正面",
+    "反面",
+    "细节",
+    "材质"
+  ],
+  "defaultDetailTasks": [
+    "扣头",
+    "皮纹",
+    "孔位",
+    "边缘"
+  ],
+  "defaultPartialTasks": [
+    "腰身展示"
+  ],
+  "modelPromptHints": "腰带出现在腰部，完整展示商品比例与搭配关系",
+  "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+  "isSellableByDefault": true,
+  "builtin": true
+}

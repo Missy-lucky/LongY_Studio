@@ -1,0 +1,29 @@
+{
+  "id": "coat",
+  "name": "外套",
+  "group": "上装",
+  "icon": "Shirt",
+  "bodyZone": "躯干（上）",
+  "layerOrder": 30,
+  "requiredViews": [
+    "正面",
+    "反面",
+    "侧面",
+    "细节",
+    "材质"
+  ],
+  "defaultDetailTasks": [
+    "翻领",
+    "纽扣",
+    "口袋",
+    "面料"
+  ],
+  "defaultPartialTasks": [
+    "全身展示",
+    "背面展示"
+  ],
+  "modelPromptHints": "外套出现在躯干（上），完整展示商品比例与搭配关系",
+  "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+  "isSellableByDefault": true,
+  "builtin": true
+}

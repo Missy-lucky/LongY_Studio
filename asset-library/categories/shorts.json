@@ -1,0 +1,27 @@
+{
+  "id": "shorts",
+  "name": "短裤",
+  "group": "下装",
+  "icon": "Shirt",
+  "bodyZone": "下肢",
+  "layerOrder": 20,
+  "requiredViews": [
+    "正面",
+    "反面",
+    "侧面",
+    "细节",
+    "材质"
+  ],
+  "defaultDetailTasks": [
+    "腰头",
+    "裤脚",
+    "口袋"
+  ],
+  "defaultPartialTasks": [
+    "腿部展示"
+  ],
+  "modelPromptHints": "短裤出现在下肢，完整展示商品比例与搭配关系",
+  "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+  "isSellableByDefault": true,
+  "builtin": true
+}

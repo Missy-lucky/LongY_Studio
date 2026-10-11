@@ -1,0 +1,9 @@
+{
+  "version": "0.1.0",
+  "categories": [
+    "categories/top.json",
+    "categories/pants.json",
+    "categories/belt.json",
+    "categories/shoes.json"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "licenseNote": "内部 v2.0 定稿身份资产，仅 LongY Studio 生产流程使用",
+  "hair": "金棕色长直发",
+  "styles": [
+    "通勤",
+    "廓形外套",
+    "裤装",
+    "高级感"
+  ],
+  "name": "M3 欧美飒爽",
+  "id": "western-chic",
+  "pose": "正面全身 / 三四分全身 / 背面全身",
+  "referencePath": "asset-library/model-library/v2/western-chic/fullbody.png",
+  "description": "sharp cool editorial presence，颧骨与下颌线清晰，气场自信利落，不厚重妆感。",
+  "enabled": true,
+  "skinTone": "健康小麦偏自然白"
+}

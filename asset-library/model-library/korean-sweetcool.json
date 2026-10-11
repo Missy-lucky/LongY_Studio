@@ -1,0 +1,17 @@
+{
+  "licenseNote": "内部 v2.0 定稿身份资产，仅 LongY Studio 生产流程使用",
+  "hair": "黑色高马尾，发面干净利落",
+  "styles": [
+    "通勤",
+    "针织",
+    "卫衣",
+    "年轻潮流"
+  ],
+  "name": "M2 韩系甜酷",
+  "id": "korean-sweetcool",
+  "pose": "正面全身 / 三四分全身 / 背面全身",
+  "referencePath": "asset-library/model-library/v2/korean-sweetcool/fullbody.png",
+  "description": "面部精致小巧，平直眉、内双或平单眼皮、卧蚕明显，甜中带酷、有少年感。",
+  "enabled": true,
+  "skinTone": "清透自然肤色"
+}

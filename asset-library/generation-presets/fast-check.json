@@ -1,0 +1,12 @@
+{
+  "id": "fast-check",
+  "name": "快速检查方案",
+  "tier": "draft",
+  "flat": "firstTwoViews",
+  "detailPerItem": 2,
+  "partialPerItem": 1,
+  "modelAngles": [
+    "正面全身"
+  ],
+  "cacheEnabled": true
+}

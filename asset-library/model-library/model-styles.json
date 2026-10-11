@@ -1,0 +1,32 @@
+[
+  {
+    "modelId": "chinese-grand",
+    "description": "端庄大气的东方美感，眉眼舒展、鼻梁挺拔，眼神沉稳有气场；不网红脸、不幼态。",
+    "group": "v2 定稿",
+    "id": "chinese-grand",
+    "name": "M1 中国风大气",
+    "referenceImages": [
+      "asset-library/model-library/v2/chinese-grand/fullbody.png"
+    ]
+  },
+  {
+    "modelId": "korean-sweetcool",
+    "description": "面部精致小巧，平直眉、内双或平单眼皮、卧蚕明显，甜中带酷、有少年感。",
+    "group": "v2 定稿",
+    "id": "korean-sweetcool",
+    "name": "M2 韩系甜酷",
+    "referenceImages": [
+      "asset-library/model-library/v2/korean-sweetcool/fullbody.png"
+    ]
+  },
+  {
+    "modelId": "western-chic",
+    "description": "sharp cool editorial presence，颧骨与下颌线清晰，气场自信利落，不厚重妆感。",
+    "group": "v2 定稿",
+    "id": "western-chic",
+    "name": "M3 欧美飒爽",
+    "referenceImages": [
+      "asset-library/model-library/v2/western-chic/fullbody.png"
+    ]
+  }
+]

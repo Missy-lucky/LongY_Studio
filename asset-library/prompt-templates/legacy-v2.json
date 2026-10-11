@@ -1,0 +1,28 @@
+{
+  "id": "legacy-v2",
+  "version": 2,
+  "source": "Model/脚本/1-批量生成平面图.py and Model/脚本/5-批量生成模特商品图.ps1",
+  "flatBase": "Image 1 is the authoritative original clothing. Image 2 is only a plan-view style and composition reference; never copy the garment shown in Image 2. Convert the actual clothing from Image 1 into a realistic catalog plan-view flat-lay. If Image 1 contains a multi-piece set, lay every piece separately and completely in one balanced square composition. The garment must look physically spread flat with natural soft volume, viewed straight from above, symmetric and uncropped. Preserve garment type, silhouette, length, proportions, color, fabric, closures, pockets, seams and stitching. Remove only the person, mannequin, hanger, background, floor, wall, cast shadows and text. Pure white background with generous margins. No cartoon, vector, technical drawing, collage, comparison panel, labels or reference thumbnail.",
+  "flatRetouch": "Retouch Image 1 only. Image 1 is the approved flat-lay base and must define the final composition: keep its exact garment placement, silhouette, proportions, soft flattened feel, volume, camera angle, spacing, white background and margins. Do not rearrange, resize, redraw, reframe or replace the garments. Image 2 is the original photo. Image 3 is a high-resolution detail evidence grid from the same photo; it is not a layout to copy. Use Images 2 and 3 only to correct construction details already present in Image 1. Restore every visible button, buttonhole, inner lining, collar, front opening, pocket, seam, topstitching, waistband, fly, belt loop, cuff and hem exactly. When trousers have parallel waist stitching lines, preserve both lines. Blend corrections into Image 1's existing flat-lay lighting and fabric volume. Everything else from Image 1 remains unchanged. No text, labels, collage, thumbnails, extra panels or new garments.",
+  "modelBase": "Image 1 is the authoritative garment reference. Image 2 is the exact virtual-model identity reference. Image 3 is only a commercial display-style reference; never copy its person, face, hairstyle, body, pose or clothing. Dress the exact model from Image 2 in the exact garment from Image 1. Preserve the garment's construction, silhouette, length, proportions, color, fabric, closures, pockets, seams and stitching. Use a natural e-commerce composition on a clean pure-white background with soft even studio lighting and a subtle natural contact shadow. Body proportion hard rules: height 170 cm, weight 56-58 kg, shoulder width about 2.5 head widths, upper/lower body about a 4:6 split, hourglass silhouette, 7.5-8 heads tall, believable shoulders and hips, no oversized head, no five-five split, no short legs, and no wide-angle stretching. Keep natural anatomy, hands, skin texture and slight facial asymmetry. Avoid an AI-generated appearance, 3D render, CGI, illustration, anime, plastic skin, over-smoothing, perfect symmetry, rigid mannequin pose, text, logos or extra props.",
+  "negativePrompt": "Do not change garment type, silhouette, length, color, pattern, closures, pockets, seams or stitching. Do not add absent buttons, zippers, pockets, labels, logos, accessories, people, mannequins, hangers, text, collage panels or reference thumbnails. Do not produce cartoon, vector, technical drawing, 3D, anime, oversaturated or heavily retouched results.",
+  "output": {
+    "flat": {
+      "width": 1536,
+      "height": 1536,
+      "background": "white"
+    },
+    "model": {
+      "width": 1152,
+      "height": 1536,
+      "background": "white"
+    }
+  },
+  "qualityGates": {
+    "borderWhiteMin": 0.97,
+    "foregroundCoverageMin": 0.08,
+    "foregroundCoverageMax": 0.88,
+    "marginPx": 16,
+    "retouchCorrelationMin": 0.82
+  }
+}

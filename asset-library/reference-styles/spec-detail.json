@@ -1,0 +1,13 @@
+{
+  "id": "spec-detail",
+  "type": "detail",
+  "name": "细节微距规范",
+  "composition": "局部放大，留白 10%",
+  "background": "浅灰渐变",
+  "lighting": "侧逆光",
+  "ratio": "4:5",
+  "applicableCategories": [
+    "*"
+  ],
+  "isDefault": true
+}

@@ -1,0 +1,13 @@
+{
+  "id": "spec-partial",
+  "type": "partial",
+  "name": "局部搭配规范",
+  "composition": "三分法构图",
+  "background": "场景虚化",
+  "lighting": "自然光",
+  "ratio": "4:5",
+  "applicableCategories": [
+    "*"
+  ],
+  "isDefault": true
+}

@@ -1,0 +1,13 @@
+{
+  "id": "spec-flat",
+  "type": "flat",
+  "name": "电商白底规范",
+  "composition": "正面平铺，居中构图",
+  "background": "纯白背景",
+  "lighting": "均匀柔光",
+  "ratio": "1:1",
+  "applicableCategories": [
+    "*"
+  ],
+  "isDefault": true
+}

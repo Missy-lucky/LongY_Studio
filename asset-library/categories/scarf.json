@@ -1,0 +1,26 @@
+{
+  "id": "scarf",
+  "name": "围巾",
+  "group": "配饰",
+  "icon": "Wind",
+  "bodyZone": "颈部",
+  "layerOrder": 40,
+  "requiredViews": [
+    "正面",
+    "反面",
+    "细节",
+    "材质"
+  ],
+  "defaultDetailTasks": [
+    "纹理",
+    "流苏",
+    "织法"
+  ],
+  "defaultPartialTasks": [
+    "颈部展示"
+  ],
+  "modelPromptHints": "围巾出现在颈部，完整展示商品比例与搭配关系",
+  "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+  "isSellableByDefault": true,
+  "builtin": true
+}

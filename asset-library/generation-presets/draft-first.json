@@ -1,0 +1,14 @@
+{
+  "id": "draft-first",
+  "name": "草稿优先默认方案",
+  "tier": "draft",
+  "flat": "requiredViews",
+  "detailPerItem": 4,
+  "partialPerItem": 2,
+  "modelAngles": [
+    "正面全身",
+    "侧面全身",
+    "背面全身"
+  ],
+  "cacheEnabled": true
+}

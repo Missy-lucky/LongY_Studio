@@ -1,0 +1,26 @@
+{
+  "id": "wallet",
+  "name": "钱包",
+  "group": "包袋",
+  "icon": "CreditCard",
+  "bodyZone": "手部 / 肩部",
+  "layerOrder": 45,
+  "requiredViews": [
+    "正面",
+    "侧面",
+    "细节",
+    "材质"
+  ],
+  "defaultDetailTasks": [
+    "外皮",
+    "内格",
+    "拉链"
+  ],
+  "defaultPartialTasks": [
+    "手持展示"
+  ],
+  "modelPromptHints": "钱包出现在手部 / 肩部，完整展示商品比例与搭配关系",
+  "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+  "isSellableByDefault": true,
+  "builtin": true
+}

@@ -1,0 +1,889 @@
+[
+  {
+    "id": "top",
+    "name": "上衣",
+    "group": "上装",
+    "icon": "Shirt",
+    "bodyZone": "躯干（上）",
+    "layerOrder": 30,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "侧面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "领口",
+      "袖口",
+      "下摆",
+      "纹理"
+    ],
+    "defaultPartialTasks": [
+      "半身展示",
+      "袖臂特写"
+    ],
+    "modelPromptHints": "上衣出现在躯干（上），完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "inner",
+    "name": "内搭",
+    "group": "上装",
+    "icon": "Shirt",
+    "bodyZone": "躯干（上）",
+    "layerOrder": 30,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "侧面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "领口",
+      "面料纹理"
+    ],
+    "defaultPartialTasks": [
+      "内搭展示"
+    ],
+    "modelPromptHints": "内搭出现在躯干（上），完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "coat",
+    "name": "外套",
+    "group": "上装",
+    "icon": "Shirt",
+    "bodyZone": "躯干（上）",
+    "layerOrder": 30,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "侧面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "翻领",
+      "纽扣",
+      "口袋",
+      "面料"
+    ],
+    "defaultPartialTasks": [
+      "全身展示",
+      "背面展示"
+    ],
+    "modelPromptHints": "外套出现在躯干（上），完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "vest",
+    "name": "马甲",
+    "group": "上装",
+    "icon": "Shirt",
+    "bodyZone": "躯干（上）",
+    "layerOrder": 30,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "侧面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "前襟",
+      "扣子",
+      "口袋"
+    ],
+    "defaultPartialTasks": [
+      "半身展示"
+    ],
+    "modelPromptHints": "马甲出现在躯干（上），完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "shirt",
+    "name": "衬衫",
+    "group": "上装",
+    "icon": "Shirt",
+    "bodyZone": "躯干（上）",
+    "layerOrder": 30,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "侧面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "领口",
+      "袖扣",
+      "门襟",
+      "面料"
+    ],
+    "defaultPartialTasks": [
+      "半身展示"
+    ],
+    "modelPromptHints": "衬衫出现在躯干（上），完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "tshirt",
+    "name": "T恤",
+    "group": "上装",
+    "icon": "Shirt",
+    "bodyZone": "躯干（上）",
+    "layerOrder": 30,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "侧面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "领口",
+      "印花",
+      "面料"
+    ],
+    "defaultPartialTasks": [
+      "半身展示"
+    ],
+    "modelPromptHints": "T恤出现在躯干（上），完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "hoodie",
+    "name": "卫衣",
+    "group": "上装",
+    "icon": "Shirt",
+    "bodyZone": "躯干（上）",
+    "layerOrder": 30,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "侧面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "帽子",
+      "抽绳",
+      "口袋",
+      "面料"
+    ],
+    "defaultPartialTasks": [
+      "半身展示"
+    ],
+    "modelPromptHints": "卫衣出现在躯干（上），完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "sweater",
+    "name": "毛衣",
+    "group": "上装",
+    "icon": "Shirt",
+    "bodyZone": "躯干（上）",
+    "layerOrder": 30,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "侧面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "编织纹理",
+      "领口",
+      "袖口"
+    ],
+    "defaultPartialTasks": [
+      "半身展示"
+    ],
+    "modelPromptHints": "毛衣出现在躯干（上），完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "blazer",
+    "name": "西装",
+    "group": "上装",
+    "icon": "Shirt",
+    "bodyZone": "躯干（上）",
+    "layerOrder": 30,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "侧面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "翻领",
+      "驳头",
+      "纽扣",
+      "内衬"
+    ],
+    "defaultPartialTasks": [
+      "全身展示"
+    ],
+    "modelPromptHints": "西装出现在躯干（上），完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "pants",
+    "name": "裤子",
+    "group": "下装",
+    "icon": "Shirt",
+    "bodyZone": "下肢",
+    "layerOrder": 20,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "侧面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "腰头",
+      "口袋",
+      "裤脚",
+      "面料"
+    ],
+    "defaultPartialTasks": [
+      "腿部展示"
+    ],
+    "modelPromptHints": "裤子出现在下肢，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "skirt",
+    "name": "裙子",
+    "group": "下装",
+    "icon": "Shirt",
+    "bodyZone": "下肢",
+    "layerOrder": 20,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "侧面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "腰头",
+      "裙摆",
+      "面料"
+    ],
+    "defaultPartialTasks": [
+      "半身展示"
+    ],
+    "modelPromptHints": "裙子出现在下肢，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "shorts",
+    "name": "短裤",
+    "group": "下装",
+    "icon": "Shirt",
+    "bodyZone": "下肢",
+    "layerOrder": 20,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "侧面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "腰头",
+      "裤脚",
+      "口袋"
+    ],
+    "defaultPartialTasks": [
+      "腿部展示"
+    ],
+    "modelPromptHints": "短裤出现在下肢，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "jeans",
+    "name": "牛仔裤",
+    "group": "下装",
+    "icon": "Shirt",
+    "bodyZone": "下肢",
+    "layerOrder": 20,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "侧面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "腰头",
+      "裤袋",
+      "裤脚",
+      "铆钉"
+    ],
+    "defaultPartialTasks": [
+      "腿部展示"
+    ],
+    "modelPromptHints": "牛仔裤出现在下肢，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "halfSkirt",
+    "name": "半身裙",
+    "group": "下装",
+    "icon": "Shirt",
+    "bodyZone": "下肢",
+    "layerOrder": 20,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "侧面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "腰头",
+      "裙摆",
+      "开叉"
+    ],
+    "defaultPartialTasks": [
+      "半身展示"
+    ],
+    "modelPromptHints": "半身裙出现在下肢，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "dress",
+    "name": "连衣裙",
+    "group": "下装",
+    "icon": "Shirt",
+    "bodyZone": "下肢",
+    "layerOrder": 20,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "侧面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "领口",
+      "腰部",
+      "裙摆",
+      "背面"
+    ],
+    "defaultPartialTasks": [
+      "全身展示"
+    ],
+    "modelPromptHints": "连衣裙出现在下肢，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "shoes",
+    "name": "鞋子",
+    "group": "鞋履",
+    "icon": "Footprints",
+    "bodyZone": "足部",
+    "layerOrder": 10,
+    "requiredViews": [
+      "正面",
+      "侧面",
+      "底部",
+      "细节"
+    ],
+    "defaultDetailTasks": [
+      "鞋头",
+      "鞋带",
+      "鞋底",
+      "车线"
+    ],
+    "defaultPartialTasks": [
+      "脚部展示"
+    ],
+    "modelPromptHints": "鞋子出现在足部，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "boots",
+    "name": "靴子",
+    "group": "鞋履",
+    "icon": "Footprints",
+    "bodyZone": "足部",
+    "layerOrder": 10,
+    "requiredViews": [
+      "正面",
+      "侧面",
+      "底部",
+      "细节"
+    ],
+    "defaultDetailTasks": [
+      "靴筒",
+      "拉链",
+      "鞋跟",
+      "鞋头"
+    ],
+    "defaultPartialTasks": [
+      "小腿展示"
+    ],
+    "modelPromptHints": "靴子出现在足部，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "heels",
+    "name": "高跟鞋",
+    "group": "鞋履",
+    "icon": "Footprints",
+    "bodyZone": "足部",
+    "layerOrder": 10,
+    "requiredViews": [
+      "正面",
+      "侧面",
+      "底部",
+      "细节"
+    ],
+    "defaultDetailTasks": [
+      "鞋跟",
+      "鞋头",
+      "绑带"
+    ],
+    "defaultPartialTasks": [
+      "脚部展示"
+    ],
+    "modelPromptHints": "高跟鞋出现在足部，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "sneakers",
+    "name": "运动鞋",
+    "group": "鞋履",
+    "icon": "Footprints",
+    "bodyZone": "足部",
+    "layerOrder": 10,
+    "requiredViews": [
+      "正面",
+      "侧面",
+      "底部",
+      "细节"
+    ],
+    "defaultDetailTasks": [
+      "鞋头",
+      "鞋带",
+      "气垫",
+      "logo"
+    ],
+    "defaultPartialTasks": [
+      "脚部展示"
+    ],
+    "modelPromptHints": "运动鞋出现在足部，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "slippers",
+    "name": "拖鞋",
+    "group": "鞋履",
+    "icon": "Footprints",
+    "bodyZone": "足部",
+    "layerOrder": 10,
+    "requiredViews": [
+      "正面",
+      "侧面",
+      "底部",
+      "细节"
+    ],
+    "defaultDetailTasks": [
+      "鞋面",
+      "鞋底"
+    ],
+    "defaultPartialTasks": [
+      "脚部展示"
+    ],
+    "modelPromptHints": "拖鞋出现在足部，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "hat",
+    "name": "帽子",
+    "group": "配饰",
+    "icon": "Crown",
+    "bodyZone": "头部",
+    "layerOrder": 40,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "帽檐",
+      "logo",
+      "材质"
+    ],
+    "defaultPartialTasks": [
+      "头部展示"
+    ],
+    "modelPromptHints": "帽子出现在头部，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "belt",
+    "name": "腰带",
+    "group": "配饰",
+    "icon": "Circle",
+    "bodyZone": "腰部",
+    "layerOrder": 40,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "扣头",
+      "皮纹",
+      "孔位",
+      "边缘"
+    ],
+    "defaultPartialTasks": [
+      "腰身展示"
+    ],
+    "modelPromptHints": "腰带出现在腰部，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "scarf",
+    "name": "围巾",
+    "group": "配饰",
+    "icon": "Wind",
+    "bodyZone": "颈部",
+    "layerOrder": 40,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "纹理",
+      "流苏",
+      "织法"
+    ],
+    "defaultPartialTasks": [
+      "颈部展示"
+    ],
+    "modelPromptHints": "围巾出现在颈部，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "earring",
+    "name": "耳环",
+    "group": "配饰",
+    "icon": "Circle",
+    "bodyZone": "耳部",
+    "layerOrder": 40,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "正面",
+      "侧面",
+      "细节"
+    ],
+    "defaultPartialTasks": [
+      "耳部展示"
+    ],
+    "modelPromptHints": "耳环出现在耳部，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "necklace",
+    "name": "项链",
+    "group": "配饰",
+    "icon": "Circle",
+    "bodyZone": "颈部",
+    "layerOrder": 40,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "吊坠",
+      "链条",
+      "扣环"
+    ],
+    "defaultPartialTasks": [
+      "颈部展示"
+    ],
+    "modelPromptHints": "项链出现在颈部，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "bracelet",
+    "name": "手链",
+    "group": "配饰",
+    "icon": "Circle",
+    "bodyZone": "手腕",
+    "layerOrder": 40,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "链节",
+      "扣头",
+      "材质"
+    ],
+    "defaultPartialTasks": [
+      "手腕展示"
+    ],
+    "modelPromptHints": "手链出现在手腕，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "watch",
+    "name": "手表",
+    "group": "配饰",
+    "icon": "Watch",
+    "bodyZone": "手腕",
+    "layerOrder": 40,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "表盘",
+      "表带",
+      "表扣"
+    ],
+    "defaultPartialTasks": [
+      "手腕展示"
+    ],
+    "modelPromptHints": "手表出现在手腕，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "sunglasses",
+    "name": "墨镜",
+    "group": "配饰",
+    "icon": "Glasses",
+    "bodyZone": "面部",
+    "layerOrder": 40,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "镜片",
+      "镜框",
+      "镜腿"
+    ],
+    "defaultPartialTasks": [
+      "面部展示"
+    ],
+    "modelPromptHints": "墨镜出现在面部，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "ring",
+    "name": "戒指",
+    "group": "配饰",
+    "icon": "Circle",
+    "bodyZone": "手部",
+    "layerOrder": 40,
+    "requiredViews": [
+      "正面",
+      "反面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "正面",
+      "侧面",
+      "镶嵌"
+    ],
+    "defaultPartialTasks": [
+      "手部展示"
+    ],
+    "modelPromptHints": "戒指出现在手部，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "handbag",
+    "name": "手提包",
+    "group": "包袋",
+    "icon": "Briefcase",
+    "bodyZone": "手部 / 肩部",
+    "layerOrder": 45,
+    "requiredViews": [
+      "正面",
+      "侧面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "提手",
+      "五金件",
+      "面料",
+      "内衬"
+    ],
+    "defaultPartialTasks": [
+      "手持展示"
+    ],
+    "modelPromptHints": "手提包出现在手部 / 肩部，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "backpack",
+    "name": "背包",
+    "group": "包袋",
+    "icon": "Backpack",
+    "bodyZone": "手部 / 肩部",
+    "layerOrder": 45,
+    "requiredViews": [
+      "正面",
+      "侧面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "正面",
+      "侧袋",
+      "肩带",
+      "面料"
+    ],
+    "defaultPartialTasks": [
+      "背负展示"
+    ],
+    "modelPromptHints": "背包出现在手部 / 肩部，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "crossbody",
+    "name": "斜挎包",
+    "group": "包袋",
+    "icon": "Briefcase",
+    "bodyZone": "手部 / 肩部",
+    "layerOrder": 45,
+    "requiredViews": [
+      "正面",
+      "侧面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "包身",
+      "肩带",
+      "五金件"
+    ],
+    "defaultPartialTasks": [
+      "肩挎展示"
+    ],
+    "modelPromptHints": "斜挎包出现在手部 / 肩部，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  },
+  {
+    "id": "wallet",
+    "name": "钱包",
+    "group": "包袋",
+    "icon": "CreditCard",
+    "bodyZone": "手部 / 肩部",
+    "layerOrder": 45,
+    "requiredViews": [
+      "正面",
+      "侧面",
+      "细节",
+      "材质"
+    ],
+    "defaultDetailTasks": [
+      "外皮",
+      "内格",
+      "拉链"
+    ],
+    "defaultPartialTasks": [
+      "手持展示"
+    ],
+    "modelPromptHints": "钱包出现在手部 / 肩部，完整展示商品比例与搭配关系",
+    "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
+    "isSellableByDefault": true,
+    "builtin": true
+  }
+]

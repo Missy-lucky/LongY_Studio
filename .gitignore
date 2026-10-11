@@ -1,0 +1,40 @@
+# Temporary artifacts
+temp/
+.playwright-cli/
+
+# Dependencies
+node_modules/
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Build outputs
+dist/
+release/
+*.tsbuildinfo
+
+# Runtime user data
+storage/*
+!storage/README.md
+!storage/.gitkeep
+!storage/sqlite/
+!storage/sqlite/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Legacy source archive and user-provided reference photos are not source code
+Model/
+asset-library/reference-images/
+
+# Keep runtime SQLite out of version control
+storage/sqlite/*
+!storage/sqlite/.gitkeep

@@ -1,0 +1,13 @@
+{
+  "id": "model-a",
+  "name": "模特 A · 清冷挂",
+  "pose": "站姿 / 行走",
+  "styles": [
+    "简约",
+    "通勤"
+  ],
+  "skinTone": "自然冷白",
+  "hair": "黑长直",
+  "licenseNote": "已确认商业授权（2027-12 前）",
+  "enabled": false
+}
