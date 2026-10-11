@@ -100,6 +100,7 @@ def plan_tasks(
     provider_id: str = "mock",
     replace_existing: bool = False,
     model_ids: list[str] | None = None,
+    shot_ids: list[str] | None = None,
 ) -> dict:
     preset = _load_preset(preset_id)
     provider = resolve_provider(provider_id)
@@ -108,6 +109,7 @@ def plan_tasks(
     allowed_priorities = _allowed_priorities(preset_id)
     db = get_db()
     planned, cached, skipped = [], [], 0
+    requested_shots = set(shot_ids) if shot_ids is not None else None
 
     try:
         if replace_existing:
@@ -135,6 +137,13 @@ def plan_tasks(
             (item for item in items if item["is_sellable"]),
             items[0] if items else None,
         )
+        selection_rows = {
+            (row["item_id"], row["shot_id"]): dict(row)
+            for row in db.execute(
+                "SELECT * FROM project_shot_selections WHERE project_id=?",
+                (project_id,),
+            ).fetchall()
+        }
 
         def add(item, shot: dict, model=None):
             nonlocal max_code
@@ -190,7 +199,28 @@ def plan_tasks(
 
             attributes = json.loads(item["attributes_json"] or "{}")
             expanded = _expand_template_shots(template, attributes)
-            visible = [shot for shot in expanded if shot["priority"] in allowed_priorities]
+            expanded.extend({
+                "id": row["shot_id"],
+                "name": row["shot_name"],
+                "type": row["type"],
+                "required": bool(row["required"]),
+                "priority": row["priority"],
+                "promptHints": row["prompt_hints"],
+                "references": ["garment"],
+            } for row in db.execute(
+                """SELECT * FROM project_shot_selections
+                   WHERE project_id=? AND item_id=? AND is_custom=1""",
+                (project_id, item["id"]),
+            ).fetchall())
+
+            if requested_shots is None:
+                visible = [shot for shot in expanded if shot["priority"] in allowed_priorities]
+            else:
+                visible = [
+                    shot for shot in expanded
+                    if shot["id"] in requested_shots
+                    and selection_rows.get((item["id"], shot["id"]), {}).get("status", "selected") == "selected"
+                ]
             skipped += len(expanded) - len(visible)
 
             for shot in visible:

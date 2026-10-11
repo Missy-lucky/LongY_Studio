@@ -161,3 +161,68 @@ def test_export_coverage_blocks_missing_required_shot():
         blocked = client.post(f"/api/projects/{pid}/exports", json={"taskIds": []})
         assert blocked.status_code == 409
         assert "帽型特写" in blocked.json()["detail"]
+
+def test_editable_shot_plan_controls_cost_and_coverage():
+    import uuid
+
+    with TestClient(app) as client:
+        suffix = uuid.uuid4().hex[:6]
+        project = client.post("/api/projects", json={
+            "sku": f"PLAN-{suffix}", "name": "镜头方案确认测试", "platform": "taobao",
+            "style": "简约", "budget": 10,
+        }).json()
+        pid = project["id"]
+        client.post(f"/api/projects/{pid}/items", json={
+            "name": "卫衣", "categoryId": "hoodie",
+            "attributes": {"hasHood": True, "hasZip": False},
+        })
+        preview = client.post(f"/api/projects/{pid}/tasks/plan/preview", json={
+            "presetId": "draft-first", "provider": "mock", "modelIds": ["chinese-grand"],
+        }).json()
+        shots = preview["items"][0]["shots"]
+        assert preview["selectedCount"] == 10
+        assert all(shot["status"] == "selected" for shot in shots if shot["priority"] == "P0")
+        assert all(shot["status"] == "proposed" for shot in shots if shot["priority"] != "P0")
+
+        p0 = [shot for shot in shots if shot["priority"] == "P0"]
+        selected = p0[:2]
+        selected_ids = {shot["shotId"] for shot in selected}
+        payload = []
+        for shot in shots:
+            row = {
+                "itemId": preview["items"][0]["itemId"],
+                "shotId": shot["shotId"],
+                "shotName": shot["shotName"],
+                "type": shot["type"],
+                "priority": shot["priority"],
+                "required": shot["required"],
+                "isCustom": shot["isCustom"],
+                "status": "selected" if shot["shotId"] in selected_ids else "waived",
+                "source": "ai",
+                "reason": "" if shot["shotId"] in selected_ids else "本次上架不需要",
+                "promptHints": shot["promptHints"],
+            }
+            payload.append(row)
+        saved = client.put(f"/api/projects/{pid}/tasks/shot-selections", json={"selections": payload})
+        assert saved.status_code == 200 and saved.json()["saved"] == len(payload)
+
+        planned = client.post(f"/api/projects/{pid}/tasks/plan", json={
+            "presetId": "draft-first", "provider": "mock", "replaceExisting": True,
+            "modelIds": ["chinese-grand"], "shotIds": sorted(selected_ids),
+        }).json()
+        assert len(planned["planned"]) == 2
+        tasks = client.get(f"/api/projects/{pid}/tasks").json()["tasks"]
+        assert {task["shotId"] for task in tasks} == selected_ids
+
+        preview = client.get(f"/api/projects/{pid}/exports/preview").json()
+        assert not preview["coverageComplete"]
+        db = get_db()
+        try:
+            db.execute("UPDATE tasks SET status='accepted' WHERE project_id=?", (pid,))
+            db.commit()
+        finally:
+            db.close()
+        preview = client.get(f"/api/projects/{pid}/exports/preview").json()
+        assert preview["coverageComplete"]
+        waived = [item for item in preview["coverage"] if item["source"] == "manual"]
+        assert waived and all(item["ready"] for item in waived)

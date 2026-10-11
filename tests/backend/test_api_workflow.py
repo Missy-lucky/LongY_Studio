@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = ROOT / "temp" / "tests" / "backend-data"
+DATA_DIR = Path(os.environ["LONGY_DATA_DIR"])
 os.environ.setdefault("LONGY_DATA_DIR", str(DATA_DIR))
 os.environ.setdefault("LONGY_MAX_CONCURRENCY", "2")
 os.environ.setdefault("LONGY_MOCK_FAILURE_RATE", "0")

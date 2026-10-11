@@ -9,7 +9,9 @@ from ..config import settings
 from ..database import get_db, utc_now
 from ..providers import resolve_provider
 from ..queue.worker import worker
-from ..services.task_planner import plan_tasks
+from ..services.library_loader import load_shot_templates
+from ..services.shot_planning import build_shot_plan_preview
+from ..services.task_planner import _expand_template_shots, plan_tasks
 from ..utils.case import camelize
 
 router = APIRouter()
@@ -44,6 +46,20 @@ class PlanIn(BaseModel):
     provider: str = "mock"
     replace_existing: bool = Field(default=False, alias="replaceExisting")
     model_ids: list[str] | None = Field(default=None, alias="modelIds")
+    shot_ids: list[str] | None = Field(default=None, alias="shotIds")
+
+
+@router.post("/plan/preview")
+def plan_preview(project_id: str, body: PlanIn) -> dict:
+    db = get_db()
+    try:
+        if not db.execute("SELECT 1 FROM projects WHERE id=?", (project_id,)).fetchone():
+            raise HTTPException(404, "项目不存在")
+    finally:
+        db.close()
+    return build_shot_plan_preview(
+        project_id, body.preset_id, body.provider, body.model_ids
+    )
 
 
 @router.post("/plan")
@@ -54,7 +70,123 @@ def plan(project_id: str, body: PlanIn) -> dict:
             raise HTTPException(404, "项目不存在")
     finally:
         db.close()
-    return plan_tasks(project_id, body.preset_id, body.provider, body.replace_existing, body.model_ids)
+    return plan_tasks(
+        project_id, body.preset_id, body.provider,
+        body.replace_existing, body.model_ids, body.shot_ids,
+    )
+
+
+class ShotSelectionIn(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    item_id: str = Field(alias="itemId")
+    shot_id: str = Field(alias="shotId")
+    shot_name: str = Field(min_length=1, alias="shotName")
+    type: str
+    priority: str
+    required: bool = True
+    is_custom: bool = Field(default=False, alias="isCustom")
+    status: str = "selected"
+    source: str = "ai"
+    asset_id: str | None = Field(default=None, alias="assetId")
+    reason: str = ""
+    prompt_hints: str = Field(default="", alias="promptHints")
+
+
+class ShotSelectionBatchIn(BaseModel):
+    selections: list[ShotSelectionIn]
+
+
+@router.put("/shot-selections")
+def save_shot_selections(project_id: str, body: ShotSelectionBatchIn) -> dict:
+    db = get_db()
+    try:
+        if not db.execute("SELECT 1 FROM projects WHERE id=?", (project_id,)).fetchone():
+            raise HTTPException(404, "项目不存在")
+        items = {
+            row["id"]: dict(row)
+            for row in db.execute(
+                """SELECT i.*,c.name category_name FROM items i
+                   JOIN categories c ON c.id=i.category_id WHERE i.project_id=?""",
+                (project_id,),
+            ).fetchall()
+        }
+        templates = load_shot_templates()
+        now = utc_now()
+        with db:
+            db.execute("DELETE FROM project_shot_selections WHERE project_id=?", (project_id,))
+            for selection in body.selections:
+                item = items.get(selection.item_id)
+                if not item:
+                    raise HTTPException(400, f"镜头所属单品不存在：{selection.item_id}")
+                if selection.type not in {"flat", "partial", "detail", "model"}:
+                    raise HTTPException(400, f"非法镜头类型：{selection.type}")
+                if selection.priority not in {"P0", "P1", "P2"}:
+                    raise HTTPException(400, f"非法镜头优先级：{selection.priority}")
+                if selection.status not in {"selected", "fulfilled", "waived"}:
+                    raise HTTPException(400, f"非法镜头状态：{selection.status}")
+
+                template = templates.get(item["category_id"])
+                template_shot = None
+                if template:
+                    attributes = json.loads(item["attributes_json"] or "{}")
+                    template_shot = next((
+                        shot for shot in _expand_template_shots(template, attributes)
+                        if shot["id"] == selection.shot_id
+                    ), None)
+                if template_shot:
+                    if selection.type != template_shot["type"]:
+                        raise HTTPException(400, f"模板镜头类型不匹配：{selection.shot_id}")
+                    if selection.priority != template_shot["priority"]:
+                        raise HTTPException(400, f"模板镜头优先级不匹配：{selection.shot_id}")
+                elif not selection.is_custom:
+                    raise HTTPException(400, f"未知模板镜头：{selection.shot_id}")
+
+                source = selection.source
+                asset_id = selection.asset_id
+                if selection.status == "selected":
+                    source, asset_id = "ai", None
+                elif selection.status == "fulfilled":
+                    if source not in {"asset", "manual"}:
+                        raise HTTPException(400, "已满足镜头来源必须是 asset/manual")
+                    if source == "asset":
+                        asset_row = db.execute(
+                            """SELECT 1 FROM assets WHERE id=? AND project_id=? AND item_id=?""",
+                            (asset_id, project_id, selection.item_id),
+                        ).fetchone() if asset_id else None
+                        if not asset_row:
+                            raise HTTPException(400, "参考资产不存在或不属于该单品")
+                elif selection.status == "waived":
+                    if not selection.reason.strip():
+                        raise HTTPException(400, "豁免必拍镜头时必须填写原因")
+                    source, asset_id = "manual", None
+
+                db.execute(
+                    """INSERT INTO project_shot_selections(
+                           project_id,item_id,shot_id,shot_name,type,priority,required,is_custom,
+                           status,source,asset_id,reason,prompt_hints,created_at,updated_at
+                       ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                       ON CONFLICT(project_id,item_id,shot_id) DO UPDATE SET
+                           shot_name=excluded.shot_name,type=excluded.type,
+                           priority=excluded.priority,required=excluded.required,
+                           is_custom=excluded.is_custom,status=excluded.status,
+                           source=excluded.source,asset_id=excluded.asset_id,
+                           reason=excluded.reason,prompt_hints=excluded.prompt_hints,
+                           updated_at=excluded.updated_at""",
+                    (
+                        project_id, selection.item_id, selection.shot_id,
+                        template_shot["name"] if template_shot else selection.shot_name,
+                        selection.type, selection.priority,
+                        int(template_shot["required"] if template_shot else selection.required),
+                        int(not template_shot and selection.is_custom),
+                        selection.status, source, asset_id, selection.reason,
+                        template_shot["promptHints"] if template_shot else selection.prompt_hints,
+                        now, now,
+                    ),
+                )
+        return {"saved": len(body.selections)}
+    finally:
+        db.close()
 
 
 class SubmitIn(BaseModel):
