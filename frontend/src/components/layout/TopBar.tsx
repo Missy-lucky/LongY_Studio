@@ -31,6 +31,9 @@ export function TopBar() {
   const exportLocked = useNodeStore(s => s.exportLocked)
   const resetCanvas = useNodeStore(s => s.resetCanvas)
   const setProjectSettingsOpen = useNodeStore(s => s.setProjectSettingsOpen)
+  const saveProjectLayout = useNodeStore(s => s.saveProjectLayout)
+  const layoutDirty = useNodeStore(s => s.layoutDirty)
+  const layoutSaving = useNodeStore(s => s.layoutSaving)
   const setMode = useWorkbench(s => s.setMode)
   const setPaletteOpen = useWorkbench(s => s.setPaletteOpen)
   const toast = useWorkbench(s => s.toast)
@@ -113,6 +116,11 @@ export function TopBar() {
         <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
           {nodeProject?.name || 'LongY Studio'}
         </span>
+        {layoutDirty && (
+          <span className="rounded-full border border-warning/50 bg-warning/10 px-2 py-0.5 text-[9px] text-warning">
+            布局未保存
+          </span>
+        )}
       </div>
 
       {/* 模式切换 */}
@@ -139,10 +147,10 @@ export function TopBar() {
         </button>
 
         {/* 保存 */}
-        <button onClick={() => setProjectSettingsOpen(true)}
+        <button onClick={() => void saveProjectLayout()}
           className={clsx(iconBtn, 'hover:bg-[var(--surface-hover)]')}
-          style={iconStyle} title="保存 (Ctrl+S)">
-          <Save size={16} strokeWidth={1.5}/>
+          style={layoutDirty ? { color: 'var(--warning)' } : iconStyle} title={layoutDirty ? '布局未保存，点击保存 (Ctrl+S)' : '保存画布布局 (Ctrl+S)'}>
+          {layoutSaving ? <Loader2 size={16} className="anim-spin"/> : <Save size={16} strokeWidth={1.5}/>}
         </button>
 
         {/* 主题切换 */}

@@ -7,6 +7,7 @@ import { DEFAULT_INPUT_NODES, MODEL_STYLES, findCategory } from '../data/preset-
 import { PROCESS_ORDER, PROCESS_TITLES } from '../data/process-templates'
 import { api, type ConsistencyQcReport, type ExportPreview, type ProviderInfo, type RemoteProject, type RemoteTask, type ShotPlanPreview, type ShotSelectionInput } from '../services/api'
 import { inputPosition, modelPosition, outputPosition } from '../workflow/node-layout'
+import { applyProjectLayout, buildProjectLayout } from '../workflow/layout-persistence'
 import { buildRestoredProjectGraph } from '../workflow/project-restore'
 import { activeBackendStatus, syncNodesWithTasks } from '../workflow/task-sync'
 
@@ -41,6 +42,11 @@ export interface VersionQcState {
   report: ConsistencyQcReport | null
 }
 
+export interface LayoutSavePrompt {
+  action: 'open' | 'new' | 'close'
+  projectId?: string
+}
+
 export interface ExportResultState {
   exported: number
   failed: Array<{ taskId?: string; assetId?: string; reason: string }>
@@ -70,6 +76,9 @@ export interface NodeStoreState {
   workflowBusy: boolean
   workflowMessage: string
   restoreAttempted: boolean
+  layoutDirty: boolean
+  layoutSaving: boolean
+  layoutPrompt: LayoutSavePrompt | null
   realGenerationConfirm: RealGenerationConfirm | null
   exportPreview: ExportPreview | null
   shotPlan: ShotPlanPreview | null
@@ -78,6 +87,7 @@ export interface NodeStoreState {
 
   initCanvas: () => void
   resetCanvas: () => void
+  resetCanvasNow: () => void
   restoreLastProject: () => Promise<void>
   restoreProject: (projectId: string) => Promise<void>
   setProviderId: (providerId: ProviderInfo['id']) => void
@@ -87,6 +97,11 @@ export interface NodeStoreState {
   requestFitView: () => void
   moveNode: (nodeId: string, position: { x: number; y: number }) => void
   saveProjectMeta: (payload: Partial<RemoteProject>) => Promise<void>
+  saveProjectLayout: () => Promise<boolean>
+  requestAppClose: () => void
+  confirmLayoutPrompt: () => Promise<void>
+  discardLayoutPrompt: () => void
+  cancelLayoutPrompt: () => void
   refreshProviders: () => Promise<void>
   setGenerationTypes: (types: ProcessType[]) => void
   toggleGenerationType: (type: ProcessType) => void
@@ -233,6 +248,9 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
   workflowBusy: false,
   workflowMessage: '',
   restoreAttempted: false,
+  layoutDirty: false,
+  layoutSaving: false,
+  layoutPrompt: null,
   realGenerationConfirm: null,
   exportPreview: null,
   shotPlan: null,
@@ -294,6 +312,14 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
   },
 
   resetCanvas: () => {
+    if (get().layoutDirty) {
+      set({ layoutPrompt: { action: 'new' } })
+      return
+    }
+    get().resetCanvasNow()
+  },
+
+  resetCanvasNow: () => {
     get().nodes.forEach(node => {
       if (node.type === 'input') revokeThumbnail((node as FlowInputNode).data.image?.thumbnailUrl)
     })
@@ -305,6 +331,8 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
       realGenerationConfirm: null, exportResult: null,
       draftProjectMeta: { sku: '', name: '节点工作台项目', platform: 'local', style: 'v2 final', budget: 100 },
       projectSettingsOpen: true,
+      layoutDirty: false,
+      layoutPrompt: null,
     })
     get().initCanvas()
   },
@@ -339,11 +367,14 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
       globalThis.localStorage?.setItem('longy-backend-project-id', projectId)
       set({
         ...graph,
+        nodes: applyProjectLayout(graph.nodes, project.layout),
         canvasInitialized: true,
         backendProjectId: projectId,
         projectMeta: project,
         providerId: taskProvider === 'openrouter-icu' ? 'openrouter-icu' : 'mock',
         workflowMessage: `已恢复项目 ${project.sku}：${assets.length} 张素材，${tasks.length} 个任务`,
+        layoutDirty: false,
+        layoutPrompt: null,
       })
       await get().refreshProviders()
     } catch (error) {
@@ -378,6 +409,10 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
 
   openProject: async projectId => {
     if (get().workflowBusy) return
+    if (get().layoutDirty) {
+      set({ layoutPrompt: { action: 'open', projectId } })
+      return
+    }
     await get().restoreProject(projectId)
     set({ projectLibraryOpen: false })
     get().requestFitView()
@@ -387,7 +422,53 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
 
   moveNode: (nodeId, position) => set(state => ({
     nodes: state.nodes.map(node => node.id === nodeId ? { ...node, position } : node),
+    layoutDirty: true,
   })),
+
+  saveProjectLayout: async () => {
+    if (get().layoutSaving) return false
+    set({ layoutSaving: true, workflowMessage: '正在保存画布布局...' })
+    try {
+      const projectId = await ensureProject()
+      await api.saveProjectLayout(projectId, buildProjectLayout(get().nodes))
+      set({ layoutDirty: false, workflowMessage: '画布布局已随项目保存' })
+      return true
+    } catch (error) {
+      set({ workflowMessage: error instanceof Error ? error.message : '画布布局保存失败' })
+      return false
+    } finally {
+      set({ layoutSaving: false })
+    }
+  },
+
+  requestAppClose: () => {
+    if (get().layoutDirty) {
+      set({ layoutPrompt: { action: 'close' } })
+      return
+    }
+    window.desktopAPI?.confirmClose()
+  },
+
+  confirmLayoutPrompt: async () => {
+    const prompt = get().layoutPrompt
+    if (!prompt) return
+    const saved = await get().saveProjectLayout()
+    if (!saved) return
+    set({ layoutPrompt: null })
+    if (prompt.action === 'open' && prompt.projectId) await get().restoreProject(prompt.projectId)
+    if (prompt.action === 'new') get().resetCanvasNow()
+    if (prompt.action === 'close') window.desktopAPI?.confirmClose()
+  },
+
+  discardLayoutPrompt: () => {
+    const prompt = get().layoutPrompt
+    set({ layoutPrompt: null, layoutDirty: false })
+    if (prompt?.action === 'open' && prompt.projectId) void get().restoreProject(prompt.projectId)
+    if (prompt?.action === 'new') get().resetCanvasNow()
+    if (prompt?.action === 'close') window.desktopAPI?.confirmClose()
+  },
+
+  cancelLayoutPrompt: () => set({ layoutPrompt: null }),
 
   saveProjectMeta: async payload => {
     set({ workflowBusy: true, workflowMessage: '正在保存项目资料...' })
@@ -446,7 +527,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
     const newEdges = get().nodes
       .filter(n => n.type === 'processing')
       .map(proc => ({ id: nid('edge'), source: newNode.id, target: proc.id, edgeType: 'material' as const }))
-    set(state => ({ nodes: [...state.nodes, newNode], edges: [...state.edges, ...newEdges], typePickerOpen: false, changeTypeTargetNodeId: null }))
+    set(state => ({ nodes: [...state.nodes, newNode], edges: [...state.edges, ...newEdges], typePickerOpen: false, changeTypeTargetNodeId: null, layoutDirty: true }))
     void get().loadInputAttributes(newNode.id)
   },
 
@@ -457,6 +538,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
       nodes: state.nodes.filter(node => node.id !== nodeId),
       edges: state.edges.filter(edge => edge.source !== nodeId && edge.target !== nodeId),
       changeTypeTargetNodeId: get().changeTypeTargetNodeId === nodeId ? null : get().changeTypeTargetNodeId,
+      layoutDirty: true,
     }))
   },
 
@@ -490,10 +572,12 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
         })
         const asset = await api.importAsset(projectId, file)
         await api.confirmAsset(projectId, asset.id, item.id, categoryId, 'front')
+        const stableNodeId = `asset-${asset.id}`
         set(state => ({
           nodes: state.nodes.map(node => node.type === 'input' && node.id === nodeId
             ? {
                 ...node,
+                id: stableNodeId,
                 data: {
                   ...(node as FlowInputNode).data,
                   image: { ...(node as FlowInputNode).data.image!, remote: { projectId, itemId: item.id, assetId: asset.id } },
@@ -501,7 +585,9 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
                 },
               }
             : node),
+          edges: state.edges.map(edge => ({ ...edge, source: edge.source === nodeId ? stableNodeId : edge.source })),
           workflowMessage: `素材已入库：${file.name}`,
+          layoutDirty: true,
         }))
       } catch (error) {
         const message = error instanceof Error ? error.message : '素材导入失败'
@@ -723,6 +809,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
           ...procEdges,
         ],
         shotPlan: null,
+        layoutDirty: true,
         workflowMessage: `任务方案已确认：${tasks.length} 个 ${get().providerId === 'mock' ? 'Mock' : 'OpenRouter'} 任务`,
       }))
     } catch (error) {

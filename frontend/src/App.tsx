@@ -13,6 +13,7 @@ import { CommandPalette } from './components/CommandPalette'
 import { ContextMenu } from './components/ContextMenu'
 import { PlanPreview } from './components/plan/PlanPreview'
 import { ShotPlanReviewDialog } from './components/nodes/ShotPlanReviewDialog'
+import { LayoutSavePromptDialog } from './components/nodes/WorkflowDialogs'
 import { RejectReasonDialog } from './components/review/RejectReasonDialog'
 import { ExportPreviewModal } from './components/export/ExportPreviewModal'
 import { NewProjectDialog } from './components/common/NewProjectDialog'
@@ -30,6 +31,16 @@ export default function App() {
     root.classList.add(`accent-${accent}`)
   }, [])
 
+  useEffect(() => {
+    const guardUnload = (event: BeforeUnloadEvent) => {
+      if (!useNodeStore.getState().layoutDirty) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', guardUnload)
+    return () => window.removeEventListener('beforeunload', guardUnload)
+  }, [])
+
   useHotkeys({
     'mod+k': () => useWorkbench.getState().setPaletteOpen(!useWorkbench.getState().paletteOpen),
     'mod+p': () => useWorkbench.getState().setPaletteOpen(true),
@@ -37,7 +48,7 @@ export default function App() {
       const st = useWorkbench.getState()
       if (st.mode === 'prepare') st.buildPlan()
     },
-    'mod+s': () => useNodeStore.getState().setProjectSettingsOpen(true),
+    'mod+s': () => void useNodeStore.getState().saveProjectLayout(),
     'mod+o': () => useNodeStore.getState().setProjectLibraryOpen(true),
     'mod+1': () => useWorkbench.getState().setMode('prepare'),
     'mod+2': () => useWorkbench.getState().setMode('generate'),
@@ -66,6 +77,7 @@ export default function App() {
         <ContextMenu/>
         <PlanPreview/>
         <ShotPlanReviewDialog/>
+        <LayoutSavePromptDialog/>
         <RejectReasonDialog/>
         <ExportPreviewModal/>
         <NewProjectDialog/>

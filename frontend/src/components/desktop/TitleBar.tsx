@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Maximize2, Minus, Square, X } from 'lucide-react'
+import { useNodeStore } from '../../stores/node-store'
 
 declare global {
   interface Window {
     desktopAPI?: {
       platform: string; isElectron: boolean
       minimize: () => void; maximize: () => void; close: () => void
+      confirmClose: () => void; onBeforeClose: (cb: () => void) => void
       onMaximized: (cb: (v: boolean) => void) => void
     }
   }
@@ -16,10 +18,10 @@ export function DesktopTitleBar() {
   const [maximized, setMaximized] = useState(false)
 
   useEffect(() => {
-    if (window.desktopAPI?.isElectron) {
-      setIsElectron(true)
-      window.desktopAPI.onMaximized(setMaximized)
-    }
+    if (!window.desktopAPI?.isElectron) return
+    setIsElectron(true)
+    window.desktopAPI.onMaximized(setMaximized)
+    window.desktopAPI.onBeforeClose(() => useNodeStore.getState().requestAppClose())
   }, [])
 
   if (!isElectron) return null

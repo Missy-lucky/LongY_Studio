@@ -358,3 +358,24 @@ def test_single_flat_shot_plan_can_be_generated():
         assert len(tasks) == 1
         assert tasks[0]["shotId"] == "flat-front"
         assert tasks[0]["type"] == "flat"
+
+def test_project_layout_is_persisted_and_returned_with_project():
+    import uuid
+
+    with TestClient(app) as client:
+        suffix = uuid.uuid4().hex[:6]
+        project = client.post("/api/projects", json={
+            "sku": f"LAYOUT-{suffix}", "name": "布局持久化测试", "platform": "taobao",
+            "style": "简约", "budget": 10,
+        }).json()
+        pid = project["id"]
+        layout = {
+            "schemaVersion": "longy.project-layout.v1",
+            "positions": {"asset-test": {"x": 123, "y": 456}},
+            "roles": {"model": {"x": 78, "y": 90}},
+        }
+        saved = client.put(f"/api/projects/{pid}/layout", json=layout)
+        assert saved.status_code == 200
+        assert saved.json()["layout"] == layout
+        detail = client.get(f"/api/projects/{pid}").json()
+        assert detail["project"]["layout"] == layout

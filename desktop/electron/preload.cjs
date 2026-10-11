@@ -9,5 +9,7 @@ contextBridge.exposeInMainWorld('desktopAPI', {
   minimize: () => ipcRenderer.send('window-minimize'),
   maximize: () => ipcRenderer.send('window-maximize'),
   close: () => ipcRenderer.send('window-close'),
+  confirmClose: () => ipcRenderer.send('window-close-confirmed'),
+  onBeforeClose: (cb) => ipcRenderer.on('before-close', () => cb()),
   onMaximized: (cb) => ipcRenderer.on('window-maximized', (_, v) => cb(v)),
 })

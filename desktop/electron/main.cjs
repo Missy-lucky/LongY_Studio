@@ -24,6 +24,7 @@ if (!gotLock) {
 }
 
 let mainWindow = null
+let allowClose = false
 const projectRoots = [path.resolve(__dirname, '..'), path.resolve(__dirname, '..', '..')]
 const firstExisting = (candidates) => candidates.find((item) => fs.existsSync(item))
 
@@ -61,6 +62,12 @@ function createWindow() {
   }
 
   mainWindow.once('ready-to-show', () => mainWindow.show())
+
+  mainWindow.on('close', event => {
+    if (allowClose || mainWindow?.isDestroyed()) return
+    event.preventDefault()
+    mainWindow.webContents.send('before-close')
+  })
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
     return { action: 'deny' }
@@ -81,6 +88,10 @@ ipcMain.on('window-maximize', () => {
   else mainWindow.maximize()
 })
 ipcMain.on('window-close', () => mainWindow?.close())
+ipcMain.on('window-close-confirmed', () => {
+  allowClose = true
+  mainWindow?.close()
+})
 app.whenReady().then(createWindow)
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()

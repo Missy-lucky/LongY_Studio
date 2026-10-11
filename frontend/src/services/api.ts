@@ -18,6 +18,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export type ProviderId = 'mock' | 'openrouter-icu'
 
+export interface LayoutPosition {
+  x: number
+  y: number
+}
+
+export interface ProjectLayout {
+  schemaVersion: 'longy.project-layout.v1'
+  positions: Record<string, LayoutPosition>
+  roles: Record<string, LayoutPosition>
+}
+
 export interface RemoteProject {
   id: string
   sku: string
@@ -27,7 +38,9 @@ export interface RemoteProject {
   budget: number
   createdAt?: string
   updatedAt?: string
+  layout?: ProjectLayout | null
 }
+
 export interface RemoteItem {
   id: string
   attributes?: Record<string, boolean>
@@ -191,6 +204,11 @@ export const api = {
   listProjects: () => request<{ projects: RemoteProject[] }>('/projects'),
   getProject: (projectId: string) =>
     request<{ project: RemoteProject; taskStats: Record<string, number> }>(`/projects/${projectId}`),
+  saveProjectLayout: (projectId: string, layout: ProjectLayout) =>
+    request<{ saved: boolean; layout: ProjectLayout }>(`/projects/${projectId}/layout`, {
+      method: 'PUT',
+      body: JSON.stringify(layout),
+    }),
   updateProject: (projectId: string, payload: Partial<Omit<RemoteProject, 'id'>>) =>
     request<{ project: RemoteProject }>(`/projects/${projectId}`, {
       method: 'PATCH',

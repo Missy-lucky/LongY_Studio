@@ -24,6 +24,7 @@ export function AppMenuBar() {
   const setTypePickerOpen = useNodeStore(state => state.setTypePickerOpen)
   const setModelPickerOpen = useNodeStore(state => state.setModelPickerOpen)
   const exportLocked = useNodeStore(state => state.exportLocked)
+  const saveProjectLayout = useNodeStore(state => state.saveProjectLayout)
   const requestFitView = useNodeStore(state => state.requestFitView)
   const providerId = useNodeStore(state => state.providerId)
   const setProviderId = useNodeStore(state => state.setProviderId)
@@ -45,7 +46,8 @@ export function AppMenuBar() {
       items: [
         { label: '新建项目', icon: Plus, disabled: busy, action: resetCanvas },
         { label: '打开项目库…', icon: FolderOpen, shortcut: 'Ctrl+O', disabled: busy, action: () => setProjectLibraryOpen(true) },
-        { label: '保存项目资料…', icon: Save, shortcut: 'Ctrl+S', disabled: busy, action: () => setProjectSettingsOpen(true) },
+        { label: '保存画布布局', icon: Save, shortcut: 'Ctrl+S', disabled: busy, action: () => void saveProjectLayout() },
+        { label: '保存项目资料…', icon: Settings2, disabled: busy, action: () => setProjectSettingsOpen(true) },
         { label: '导出锁定图…', icon: Save, disabled: busy, action: () => void exportLocked() },
       ],
     },

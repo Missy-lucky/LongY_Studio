@@ -1,7 +1,8 @@
-"""项目接口：创建 / 列表 / 详情 / 事件流恢复"""
+"""项目接口：创建 / 列表 / 详情 / 布局与事件流恢复。"""
+import json
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from ..database import get_db
 from ..utils.case import camelize
 
@@ -56,6 +57,56 @@ class ProjectUpdate(BaseModel):
     budget: float | None = Field(default=None, ge=0)
 
 
+class LayoutPosition(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    x: float = Field(allow_inf_nan=False)
+    y: float = Field(allow_inf_nan=False)
+
+
+class ProjectLayoutIn(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    schema_version: str = Field(default="longy.project-layout.v1", alias="schemaVersion")
+    positions: dict[str, LayoutPosition] = Field(default_factory=dict)
+    roles: dict[str, LayoutPosition] = Field(default_factory=dict)
+
+
+def decode_layout(value: str | None) -> dict | None:
+    if not value:
+        return None
+    try:
+        layout = json.loads(value)
+    except json.JSONDecodeError:
+        return None
+    return {
+        "schemaVersion": layout.get("schemaVersion", "longy.project-layout.v1"),
+        "positions": layout.get("positions", {}),
+        "roles": layout.get("roles", {}),
+    }
+
+
+@router.put("/{project_id}/layout")
+def save_project_layout(project_id: str, body: ProjectLayoutIn) -> dict:
+    db = get_db()
+    try:
+        if not db.execute("SELECT 1 FROM projects WHERE id=?", (project_id,)).fetchone():
+            raise HTTPException(404, "项目不存在")
+        layout_json = json.dumps(body.model_dump(by_alias=True), ensure_ascii=False)
+        db.execute(
+            "UPDATE projects SET layout_json=?,updated_at=? WHERE id=?",
+            (layout_json, now(), project_id),
+        )
+        db.execute(
+            "INSERT INTO events(time,project_id,type,message) VALUES(?,?,?,?)",
+            (now(), project_id, "project.layout.save", "保存节点画布布局"),
+        )
+        db.commit()
+        return {"saved": True, "layout": decode_layout(layout_json)}
+    finally:
+        db.close()
+
+
 @router.patch("/{project_id}")
 def update_project(project_id: str, body: ProjectUpdate) -> dict:
     db = get_db()
@@ -94,7 +145,9 @@ def get_project(project_id: str) -> dict:
         stats = db.execute(
             "SELECT status, COUNT(*) n FROM tasks WHERE project_id=? GROUP BY status", (project_id,)
         ).fetchall()
-        return {"project": camelize(dict(row)), "taskStats": {r["status"]: r["n"] for r in stats}}
+        project = dict(row)
+        project["layout"] = decode_layout(project.pop("layout_json", None))
+        return {"project": camelize(project), "taskStats": {r["status"]: r["n"] for r in stats}}
     finally:
         db.close()
 

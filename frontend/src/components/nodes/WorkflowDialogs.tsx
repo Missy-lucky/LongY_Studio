@@ -152,6 +152,46 @@ export function ExportResultDialog() {
 }
 
 
+export function LayoutSavePromptDialog() {
+  const prompt = useNodeStore(state => state.layoutPrompt)
+  const cancel = useNodeStore(state => state.cancelLayoutPrompt)
+  const discard = useNodeStore(state => state.discardLayoutPrompt)
+  const confirm = useNodeStore(state => state.confirmLayoutPrompt)
+  const saving = useNodeStore(state => state.layoutSaving)
+  if (!prompt) return null
+
+  const actionText = prompt.action === 'open'
+    ? '打开其他项目'
+    : prompt.action === 'new'
+      ? '新建项目'
+      : '退出 LongY Studio'
+
+  return (
+    <div className="fixed inset-0 z-[270] flex items-center justify-center bg-black/65 p-6">
+      <div className="w-[480px] rounded-2xl border p-5" style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-lg)' }}>
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg" style={{ background: 'rgba(245,158,11,0.12)' }}>
+            <AlertTriangle size={16} className="text-warning"/>
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold">画布布局尚未保存</div>
+            <div className="mt-1 text-[11px] leading-5 text-text-secondary">
+              节点位置属于当前项目。保存后会随项目持久化；不保存则继续{actionText}，本次拖拽和节点布局调整会丢失。
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <button onClick={cancel} className="btn btn-secondary">取消</button>
+          <button onClick={discard} className="btn btn-secondary">不保存</button>
+          <button onClick={() => void confirm()} disabled={saving} className="btn btn-primary">
+            <Save size={13} strokeWidth={1.8}/>{saving ? '保存中…' : '保存并继续'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function ProjectSettingsDialog() {
   const open = useNodeStore(state => state.projectSettingsOpen)
   const setOpen = useNodeStore(state => state.setProjectSettingsOpen)
