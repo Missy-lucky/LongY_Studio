@@ -41,6 +41,9 @@
   "provider": "mock",
   "cost": 1,
   "durationMs": 3600,
+  "qcScore": 0.82,
+  "qcPassed": true,
+  "qcReportPath": "storage/projects/project/generated/version.qc.json",
   "thumbnail": "data:image/svg+xml;..."
 }
 ```
@@ -57,6 +60,28 @@
   "message": "T003 针织高领上衣 领口 细节图 v2 已生成，等待审核"
 }
 ```
+
+### 高清修复 Action
+
+```http
+POST /api/projects/{projectId}/tasks/{taskId}/hd-repair
+```
+
+```json
+{
+  "version": 2,
+  "versionId": "ver-xxx",
+  "tier": "hd"
+}
+```
+
+### 版本 QC
+
+```http
+GET /api/projects/{projectId}/tasks/{taskId}/versions/{versionId}/qc
+```
+
+返回 `score`、`passed` 与完整一致性 QC 报告。
 
 ## 品类配置 CategoryConfig
 

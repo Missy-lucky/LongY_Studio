@@ -7,6 +7,11 @@ import { STATUS_COLORS } from '../../types/node-system'
 import { useNodeStore } from '../../stores/node-store'
 
 const portStyle = '!w-2 !h-2 !border-none !bg-[var(--text-3)]'
+const PRIORITY_COLORS: Record<string, string> = {
+  P0: '#EF4444',
+  P1: '#F59E0B',
+  P2: '#64748B',
+}
 
 // ============ 输入节点 ============
 export function InputNodeComponent({ data, id }: { data: FlowInputNode['data']; id: string }) {
@@ -254,6 +259,7 @@ export function OutputNodeComponent({ data, id }: { data: FlowOutputNode['data']
   const markSatisfied = useNodeStore(s => s.markSatisfied)
   const markUnsatisfied = useNodeStore(s => s.markUnsatisfied)
   const regenerate = useNodeStore(s => s.regenerate)
+  const startHdRepair = useNodeStore(s => s.startHdRepair)
   const lockOutput = useNodeStore(s => s.lockOutput)
   const removeOutput = useNodeStore(s => s.removeOutput)
   const openImageViewer = useNodeStore(s => s.openImageViewer)
@@ -313,6 +319,23 @@ export function OutputNodeComponent({ data, id }: { data: FlowOutputNode['data']
           </span>
         </div>
 
+        {/* QC 与档位 */}
+        <div className="absolute left-1.5 top-8 flex flex-col items-start gap-1">
+          <span className="rounded px-1 py-0.5 font-mono text-[8px] uppercase"
+            style={{ background: 'rgba(0,0,0,0.48)', color: data.tier === 'hd' ? '#38BDF8' : '#D1D5DB' }}>
+            {data.tier === 'hd' ? 'HD Repair' : 'Draft'}
+          </span>
+          {data.qcScore != null && (
+            <span className="rounded px-1 py-0.5 font-mono text-[8px]"
+              style={{
+                background: 'rgba(0,0,0,0.48)',
+                color: data.qcPassed ? '#22C55E' : '#F59E0B',
+              }}>
+              QC {Math.round(data.qcScore * 100)}
+            </span>
+          )}
+        </div>
+
         {/* 版本号 */}
         {data.version > 1 && (
           <span className="absolute right-1.5 top-1.5 rounded px-1 py-0.5 font-mono text-[9px]"
@@ -352,11 +375,21 @@ export function OutputNodeComponent({ data, id }: { data: FlowOutputNode['data']
           </div>
         )}
         {status === 'satisfied' && (
-          <button onClick={event => { event.stopPropagation(); void lockOutput(id) }}
-            className="btn absolute inset-x-1.5 bottom-1.5 !min-h-[36px] !rounded-lg !text-xs"
-            style={{ background: 'rgba(14,165,233,0.86)', color: 'white' }}>
-            <Lock size={12} strokeWidth={2}/>锁定版本
-          </button>
+          <div className="absolute inset-x-1.5 bottom-1.5 flex gap-1">
+            <button onClick={event => { event.stopPropagation(); void lockOutput(id) }}
+              className="btn flex-1 !min-h-[36px] !rounded-lg !text-xs"
+              style={{ background: 'rgba(14,165,233,0.86)', color: 'white' }}>
+              <Lock size={12} strokeWidth={2}/>锁定
+            </button>
+            {data.tier === 'draft' && (
+              <button onClick={event => { event.stopPropagation(); void startHdRepair(id) }}
+                className="btn flex-1 !min-h-[36px] !rounded-lg !text-xs"
+                style={{ background: 'rgba(56,189,248,0.88)', color: 'white' }}
+                title="两阶段高清：基础图 + 细节修复">
+                <Sparkles size={12} strokeWidth={1.8}/>高清修复
+              </button>
+            )}
+          </div>
         )}
         {status === 'failed' && (
           <button onClick={event => { event.stopPropagation(); void regenerate(id) }}
@@ -376,8 +409,18 @@ export function OutputNodeComponent({ data, id }: { data: FlowOutputNode['data']
 
       {/* 底部信息 */}
       <div className="px-2.5 py-2">
-        <div className="truncate text-[11px] font-medium" style={{ color: 'var(--text)' }}>
-          {data.taskName}
+        <div className="flex items-center gap-1.5">
+          {data.priority && (
+            <span
+              className="shrink-0 rounded px-1 py-0.5 text-[8px] font-semibold"
+              style={{ background: `${PRIORITY_COLORS[data.priority]}22`, color: PRIORITY_COLORS[data.priority] }}
+            >
+              {data.priority}
+            </span>
+          )}
+          <span className="truncate text-[11px] font-medium" style={{ color: 'var(--text)' }}>
+            {data.shotName || data.taskName}
+          </span>
         </div>
         <div className="mt-0.5 flex items-center justify-between">
           <span className="font-mono text-[9px]" style={{ color: 'var(--text-3)' }}>{data.taskCode}</span>

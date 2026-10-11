@@ -5,7 +5,7 @@ import type {
 } from '../types/node-system'
 import { DEFAULT_INPUT_NODES, MODEL_STYLES, findCategory } from '../data/preset-categories'
 import { PROCESS_ORDER, PROCESS_TITLES } from '../data/process-templates'
-import { api, type ProviderInfo, type RemoteProject, type RemoteTask } from '../services/api'
+import { api, type ExportPreview, type ProviderInfo, type RemoteProject, type RemoteTask } from '../services/api'
 import { organizeNodes, outputPosition } from '../workflow/node-layout'
 import { buildRestoredProjectGraph } from '../workflow/project-restore'
 import { activeBackendStatus, syncNodesWithTasks } from '../workflow/task-sync'
@@ -59,6 +59,7 @@ export interface NodeStoreState {
   workflowMessage: string
   restoreAttempted: boolean
   realGenerationConfirm: RealGenerationConfirm | null
+  exportPreview: ExportPreview | null
   exportResult: ExportResultState | null
 
   initCanvas: () => void
@@ -86,8 +87,11 @@ export interface NodeStoreState {
   markSatisfied: (nodeId: string) => Promise<void>
   markUnsatisfied: (nodeId: string, reason?: string, customPrompt?: string) => Promise<void>
   regenerate: (nodeId: string) => Promise<void>
+  startHdRepair: (nodeId: string) => Promise<void>
   lockOutput: (nodeId: string) => Promise<void>
   exportLocked: () => Promise<void>
+  confirmExportLocked: () => Promise<void>
+  closeExportPreview: () => void
   confirmRealGeneration: () => Promise<void>
   cancelRealGeneration: () => void
   closeExportResult: () => void
@@ -186,6 +190,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
   workflowMessage: '',
   restoreAttempted: false,
   realGenerationConfirm: null,
+  exportPreview: null,
   exportResult: null,
 
   initCanvas: () => {
@@ -589,10 +594,13 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
           collapsed: false,
           data: {
             taskId: task.id, versionId: task.currentVersionId,
-            taskCode: task.code, taskName: task.name, imageType: task.type,
+            taskCode: task.code, taskName: task.name,
+            shotId: task.shotId ?? null, shotName: task.shotName ?? null,
+            priority: task.priority ?? null, imageType: task.type,
             status: 'queued' as const, thumbnail: null, version: 1,
             parentOutputId: null, rejectReason: null, customPrompt: null,
-            cost: 0, durationMs: null,
+            cost: 0, durationMs: null, tier: task.tier,
+            qcScore: null, qcPassed: null,
           },
         }
       })
@@ -795,6 +803,43 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
     }
   },
 
+  startHdRepair: async nodeId => {
+    const output = get().nodes.find(node => node.id === nodeId) as FlowOutputNode | undefined
+    const projectId = get().backendProjectId
+    if (!output || !projectId) return
+    set({ workflowBusy: true, workflowMessage: '正在创建高清细节修复版本...' })
+    try {
+      const result = await api.startHdRepair(projectId, output.data.taskId)
+      const runId = get().versionCounter + 1
+      set(state => ({
+        versionCounter: runId,
+        nodes: state.nodes.map(node => node.type === 'output' && node.id === nodeId
+          ? {
+              ...node,
+              data: {
+                ...(node as FlowOutputNode).data,
+                status: 'generating',
+                version: result.version,
+                versionId: result.versionId,
+                tier: 'hd',
+                thumbnail: null,
+                cost: 0,
+                durationMs: null,
+                qcScore: null,
+                qcPassed: null,
+              },
+            }
+          : node),
+        edges: state.edges.map(edge => edge.edgeType === 'output' ? { ...edge, animated: true } : edge),
+      }))
+      await pollTasks(runId)
+    } catch (error) {
+      set({ workflowMessage: error instanceof Error ? error.message : '高清修复创建失败' })
+    } finally {
+      set({ workflowBusy: false })
+    }
+  },
+
   lockOutput: async nodeId => {
     const output = get().nodes.find(node => node.id === nodeId) as FlowOutputNode | undefined
     const projectId = get().backendProjectId
@@ -825,21 +870,45 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
       set({ workflowMessage: '请先审核并锁定至少一张图片' })
       return
     }
-    set({ workflowBusy: true, workflowMessage: '正在导出锁定版本...' })
+    set({ workflowBusy: true, workflowMessage: '正在生成导出覆盖清单...' })
     try {
       const preview = await api.exportPreview(projectId)
+      set({
+        exportPreview: preview,
+        workflowMessage: preview.coverageComplete
+          ? '必拍镜头已齐，请在导出预览中确认'
+          : `导出被拦截：缺少 ${preview.missingShotNames.length} 个必拍镜头`,
+      })
+    } catch (error) {
+      set({ workflowMessage: error instanceof Error ? error.message : '导出预览失败' })
+    } finally {
+      set({ workflowBusy: false })
+    }
+  },
+
+  confirmExportLocked: async () => {
+    const projectId = get().backendProjectId || globalThis.localStorage?.getItem('longy-backend-project-id')
+    const preview = get().exportPreview
+    const lockedTasks = get().nodes
+      .filter(node => node.type === 'output')
+      .map(node => (node as FlowOutputNode).data)
+      .filter(output => output.status === 'locked')
+    if (!projectId || !preview?.coverageComplete || !lockedTasks.length) return
+    set({ workflowBusy: true, workflowMessage: '正在导出锁定版本...' })
+    try {
       const taskIds = lockedTasks.map(output => output.taskId)
       const result = await api.exportTasks(projectId, taskIds)
       const { tasks } = await api.listTasks(projectId)
       applyTasks(tasks)
       set({
+        exportPreview: null,
         exportResult: {
           exported: result.exported,
           failed: result.failed,
           files: result.mapping,
           targetDir: result.targetDir,
         },
-        workflowMessage: `导出完成：${result.exported} 张成功，${result.failed.length} 张失败（预览 ${preview.files.length} 张）`,
+        workflowMessage: `导出完成：${result.exported} 张成功，${result.failed.length} 张失败`,
       })
     } catch (error) {
       set({ workflowMessage: error instanceof Error ? error.message : '导出失败' })
@@ -847,6 +916,8 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
       set({ workflowBusy: false })
     }
   },
+
+  closeExportPreview: () => set({ exportPreview: null }),
 
   closeExportResult: () => set({ exportResult: null }),
 

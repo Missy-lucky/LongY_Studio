@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import PROJECT_ROOT, settings
+from ..services.detail_repair import detail_repair_prompt
 from ..services.image_qc import inspect_image, normalize_flat_output
 from .base import (
     Cancellable,
@@ -49,7 +50,7 @@ class OpenRouterICUProvider(ImageProvider):
     id = "openrouter-icu"
     name = "OpenRouter ICU 图像编辑"
     supported_tiers = ("draft", "hd")
-    price_per_image = {"draft": 1.0, "hd": 4.0}
+    price_per_image = {"draft": 1.0, "hd": 5.0}
     rate_limit_per_min = 8
     max_retries = 2
 
@@ -58,7 +59,9 @@ class OpenRouterICUProvider(ImageProvider):
         return bool(api_key() and find_cli())
 
     def _output_size(self, req: GenerateRequest) -> tuple[int, int]:
-        # 平面图沿用旧版 1536 方图；模特图沿用 3:4 商品图。
+        # 套图模板尺寸优先；旧任务没有尺寸时沿用 legacy-v2 默认值。
+        if req.output_width and req.output_height:
+            return req.output_width, req.output_height
         if req.task_type == "model":
             return (1024, 1280) if req.tier == "draft" else (1152, 1536)
         return (1536, 1536)
@@ -157,6 +160,63 @@ class OpenRouterICUProvider(ImageProvider):
 
             if cancelled.is_set() or not output.is_file():
                 return
+
+            # HD is a two-stage pipeline, not only a larger resolution parameter.
+            # The approved base is image 1; authoritative references follow it.
+            if req.tier == "hd":
+                refined = output_dir / f"v-{idempotency_key[:12] or req.task_id}-hd.png"
+                repair_references = [output, *references[:3]]
+                repair_command = [
+                    sys.executable, str(cli), "edit",
+                    "--prompt", detail_repair_prompt(req.task_type),
+                    "--size", f"{width}x{height}",
+                    "--quality", "high",
+                    "--output-format", "png",
+                    "--no-stream",
+                    "--output", str(refined),
+                ]
+                for reference in repair_references:
+                    repair_command.extend(["--image", str(reference)])
+
+                repair_error = ""
+                for attempt in range(1, self.max_retries + 2):
+                    if cancelled.is_set():
+                        return
+                    on_stage("hd-repair", f"高清细节修复提交中（第 {attempt} 次）")
+                    try:
+                        process = subprocess.Popen(
+                            repair_command,
+                            cwd=str(PROJECT_ROOT),
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            text=True,
+                            encoding="utf-8",
+                            errors="replace",
+                            env=env,
+                        )
+                        active["process"] = process
+                        stdout, stderr = process.communicate(timeout=420)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.communicate()
+                        repair_error = "HD detail repair exceeded 420 seconds"
+                    else:
+                        active["process"] = None
+                        if process.returncode == 0 and refined.is_file():
+                            break
+                        repair_error = (stderr or stdout or "unknown error").strip()[-1600:]
+                    refined.unlink(missing_ok=True)
+                    if attempt <= self.max_retries and not cancelled.is_set():
+                        if cancelled.wait(timeout=min(30, 5 * attempt)):
+                            return
+                else:
+                    fail("HD_DETAIL_REPAIR_FAILED", repair_error or "高清细节修复失败",
+                         "保留草稿版本后重试高清修复；不要直接输出仅放大的伪高清", True)
+                    return
+
+                if cancelled.is_set() or not refined.is_file():
+                    return
+                output = refined
             on_stage("write", "写入本地并执行旧版像素 QC")
             try:
                 if req.task_type == "flat":

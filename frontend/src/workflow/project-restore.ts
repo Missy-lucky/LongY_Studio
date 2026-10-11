@@ -130,6 +130,9 @@ export function buildRestoredProjectGraph({
         versionId: task.currentVersionId,
         taskCode: task.code,
         taskName: task.name,
+        shotId: task.shotId ?? null,
+        shotName: task.shotName ?? null,
+        priority: task.priority ?? null,
         imageType: task.type,
         status: outputStatus(task.status),
         thumbnail: version?.filePath
@@ -141,6 +144,9 @@ export function buildRestoredProjectGraph({
         customPrompt: null,
         cost: version?.cost ?? 0,
         durationMs: version?.durationMs ?? null,
+        tier: task.tier,
+        qcScore: version?.qcScore ?? null,
+        qcPassed: version?.qcPassed ?? null,
       },
     }
   })

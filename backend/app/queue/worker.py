@@ -1,4 +1,6 @@
 """本地任务队列：固定并发、事件留痕、幂等调用与可恢复失败。"""
+from pathlib import Path
+
 import threading
 import time
 import uuid
@@ -8,6 +10,8 @@ from ..config import PROJECT_ROOT, settings
 from ..database import get_db, utc_now
 from ..providers import resolve_provider
 from ..providers.base import GenerateRequest
+from ..services.library_loader import load_shot_templates
+from ..services.consistency_qc import run_consistency_qc, save_qc_report
 
 FLAT_REFERENCE = "asset-library/reference-templates/plan-view.png"
 MODEL_STYLE_REFERENCE = "asset-library/reference-templates/model-display.jpg"
@@ -73,25 +77,50 @@ class QueueWorker:
         version_id: str | None = None
         try:
             task = db.execute(
-                """SELECT t.*,m.reference_path model_reference_path
+                """SELECT t.*,i.category_id,m.reference_path model_reference_path
                    FROM tasks t
+                   LEFT JOIN items i ON i.id=t.item_id
                    LEFT JOIN models m ON m.id=t.model_id
                    WHERE t.id=?""",
                 (task_id,),
             ).fetchone()
             if not task or task["status"] not in ("queued", "generating"):
                 return
-            references = [r["file_path"] for r in db.execute(
+            garment_references = [r["file_path"] for r in db.execute(
                 "SELECT file_path FROM assets WHERE item_id=? ORDER BY created_at",
                 (task["item_id"],),
             ).fetchall()]
-            if task["type"] == "flat":
-                references.append(FLAT_REFERENCE)
-            elif task["type"] == "model":
-                if task["model_reference_path"]:
+            template = load_shot_templates().get(task["category_id"]) if task["category_id"] else None
+            shot = None
+            if template and task["shot_id"]:
+                candidates = [
+                    *template["shots"].get(task["type"], []),
+                    *[
+                        item
+                        for rule in template["conditionalShots"]
+                        for item in rule["add"]
+                        if item["type"] == task["type"]
+                    ],
+                ]
+                shot = next((item for item in candidates if item["id"] == task["shot_id"]), None)
+            roles = shot["references"] if shot else None
+            if roles is None:
+                roles = {
+                    "flat": ["garment"],
+                    "detail": ["garment"],
+                    "partial": ["garment"],
+                    "model": ["garment", "model-identity", "style"],
+                }[task["type"]]
+            references: list[str] = []
+            for role in roles:
+                if role == "garment":
+                    references.extend(garment_references)
+                elif role == "model-identity" and task["model_reference_path"]:
                     references.append(task["model_reference_path"])
-                references.append(MODEL_STYLE_REFERENCE)
+                elif role == "style":
+                    references.append(MODEL_STYLE_REFERENCE)
 
+            model_reference_path = task["model_reference_path"]
             version_id = task["current_version_id"]
             if version_id:
                 row = db.execute(
@@ -131,12 +160,30 @@ class QueueWorker:
 
         task = get_db().execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
         provider = resolve_provider(task["provider"])
+
+        def resolve_runtime_path(value: str | None) -> Path | None:
+            if not value:
+                return None
+            candidate = Path(value)
+            if candidate.is_absolute():
+                return candidate if candidate.is_file() else None
+            if candidate.parts and candidate.parts[0] == "asset-library":
+                candidate = PROJECT_ROOT / candidate
+            else:
+                candidate = settings.data_dir / candidate
+            return candidate if candidate.is_file() else None
+
+        garment_reference = resolve_runtime_path(references[0] if references else None)
+        model_reference = resolve_runtime_path(model_reference_path)
+        output = template["defaults"]["outputByType"][task["type"]] if template else None
         request = GenerateRequest(
             task_id=task_id,
             tier=task["tier"],
             task_type=task["type"],
             prompt=task["prompt"],
             negative_prompt=task["negative_prompt"],
+            output_width=output["width"] if output else None,
+            output_height=output["height"] if output else None,
             reference_paths=references,
         )
         done = threading.Event()
@@ -163,9 +210,32 @@ class QueueWorker:
             ).fetchone()
             if "result" in result_box:
                 result = result_box["result"]
+                output_path = Path(result.file_path)
+                try:
+                    qc_report = run_consistency_qc(
+                        output_path,
+                        task["type"],
+                        garment_reference=garment_reference,
+                        model_reference=model_reference,
+                        enforce=task["provider"] != "mock",
+                    )
+                    qc_report["tier"] = task["tier"]
+                    qc_report["pipeline"] = ["base-generation", "hd-detail-repair"] if task["tier"] == "hd" else ["base-generation"]
+                    qc_path = save_qc_report(qc_report, output_path)
+                    qc_score = qc_report.get("score")
+                    qc_passed = int(bool(qc_report.get("passed")))
+                except Exception as exc:
+                    qc_path = None
+                    qc_score = None
+                    qc_passed = 0
+                    self._event(task["project_id"], task_id, "task.qc.error", f"一致性 QC 执行失败：{exc}")
+
                 db.execute(
-                    "UPDATE task_versions SET status='review',cost=?,duration_ms=?,file_path=? WHERE id=?",
-                    (result.cost, result.duration_ms, result.file_path, version_id),
+                    """UPDATE task_versions
+                       SET status='review',cost=?,duration_ms=?,file_path=?,qc_score=?,qc_passed=?,qc_report_path=?
+                       WHERE id=?""",
+                    (result.cost, result.duration_ms, result.file_path, qc_score, qc_passed,
+                     str(qc_path) if qc_path else None, version_id),
                 )
                 db.execute(
                     "UPDATE tasks SET status='review',estimated_cost=?,updated_at=? WHERE id=?",
@@ -186,7 +256,11 @@ class QueueWorker:
                         (result.cost, result.duration_ms, call["id"]),
                     )
                 db.commit()
-                self._event(task["project_id"], task_id, "task.review", f"任务 {task['code']} 已生成，等待审核")
+                qc_message = "" if qc_passed else "；一致性 QC 未通过，请检查 QC 报告"
+                self._event(
+                    task["project_id"], task_id, "task.review",
+                    f"任务 {task['code']} 已生成，等待审核{qc_message}",
+                )
             else:
                 err = result_box.get("error")
                 message = getattr(err, "message", "生成超时")
@@ -210,5 +284,3 @@ class QueueWorker:
 
 
 worker = QueueWorker()
-
-

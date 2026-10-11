@@ -16,6 +16,8 @@ class GenerateRequest:
     negative_prompt: str
     seed: int = 0
     task_type: TaskType = "flat"
+    output_width: int | None = None
+    output_height: int | None = None
     reference_paths: list[str] = field(default_factory=list)
 
 

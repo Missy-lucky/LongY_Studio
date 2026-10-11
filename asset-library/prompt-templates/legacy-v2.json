@@ -24,5 +24,6 @@
     "foregroundCoverageMax": 0.88,
     "marginPx": 16,
     "retouchCorrelationMin": 0.82
-  }
+  },
+  "hdRepair": "Two-stage high-definition production pipeline: first generate the approved composition, then run a detail-preserving repair pass using the approved base plus authoritative garment/model references."
 }

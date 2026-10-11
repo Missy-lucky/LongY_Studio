@@ -1,4 +1,5 @@
 """任务接口：规则规划、幂等提交、审核、重生成与版本恢复。"""
+import json
 import uuid
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
@@ -136,6 +137,60 @@ def regenerate(project_id: str, task_id: str) -> dict:
     return {"version": next_v}
 
 
+@router.post("/{task_id}/hd-repair")
+def start_hd_repair(project_id: str, task_id: str) -> dict:
+    """Create a dedicated HD repair version instead of only upsizing the draft."""
+    from ..providers import resolve_provider as resolve_provider_for_estimate
+
+    db = get_db()
+    try:
+        row = db.execute(
+            """SELECT t.*,p.budget FROM tasks t JOIN projects p ON p.id=t.project_id
+               WHERE t.id=? AND t.project_id=?""",
+            (task_id, project_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "任务不存在")
+        if row["status"] not in ("accepted", "locked", "rejected", "review"):
+            raise HTTPException(409, "只有已生成并进入审核/锁定状态的任务才能执行高清修复")
+        if row["tier"] == "hd" and row["status"] in ("review",):
+            raise HTTPException(409, "该任务已在高清修复流程中")
+
+        provider = resolve_provider_for_estimate(row["provider"])
+        estimate = 0 if row["provider"] == "mock" else provider.estimate("hd", 1)
+        if row["budget"] > 0 and estimate > row["budget"]:
+            raise HTTPException(409, f"高清修复预估 {estimate:.2f} 超过项目剩余预算 {row['budget']:.2f}")
+
+        next_v = db.execute(
+            "SELECT COALESCE(MAX(version),0)+1 v FROM task_versions WHERE task_id=?", (task_id,)
+        ).fetchone()["v"]
+        version_id = uuid.uuid4().hex[:12]
+        idempotency = uuid.uuid4().hex
+        queue_index = db.execute(
+            "SELECT COALESCE(MAX(queue_index),0)+1 n FROM tasks WHERE project_id=?", (project_id,)
+        ).fetchone()["n"]
+        db.execute(
+            """INSERT INTO task_versions(id,task_id,version,tier,status,provider,created_at)
+               VALUES(?,?,?,?,?,?,?)""",
+            (version_id, task_id, next_v, "hd", "generating", row["provider"], utc_now()),
+        )
+        db.execute(
+            """UPDATE tasks SET tier='hd',status='queued',current_version_id=?,idempotency_key=?,
+               queue_index=?,updated_at=? WHERE id=?""",
+            (version_id, idempotency, queue_index, utc_now(), task_id),
+        )
+        db.execute(
+            "INSERT INTO events(time,project_id,task_id,type,message) VALUES(?,?,?,?,?)",
+            (utc_now(), project_id, task_id, "task.hd_repair",
+             f"任务创建高清细节修复 v{next_v}（两阶段：基础图 + 细节修复）"),
+        )
+        db.commit()
+    finally:
+        db.close()
+    worker.start()
+    return {"version": next_v, "versionId": version_id, "tier": "hd"}
+
+
 @router.post("/{task_id}/versions/{version_id}/restore")
 def restore(project_id: str, task_id: str, version_id: str) -> dict:
     db = get_db()
@@ -181,3 +236,37 @@ def version_file(project_id: str, task_id: str, version_id: str) -> FileResponse
 
 
 
+
+
+@router.get("/{task_id}/versions/{version_id}/qc")
+def version_qc(project_id: str, task_id: str, version_id: str) -> dict:
+    db = get_db()
+    try:
+        row = db.execute(
+            """SELECT v.qc_score,v.qc_passed,v.qc_report_path,t.project_id AS project_id
+               FROM task_versions v JOIN tasks t ON t.id=v.task_id
+               WHERE v.id=? AND v.task_id=? AND t.project_id=?""",
+            (version_id, task_id, project_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "版本 QC 报告不存在")
+        report_path = Path(row["qc_report_path"]) if row["qc_report_path"] else None
+        if report_path and not report_path.is_absolute():
+            report_path = settings.data_dir / report_path
+        report = None
+        if report_path:
+            resolved = report_path.resolve()
+            if not str(resolved).startswith(str(settings.data_dir.resolve())) or not resolved.is_file():
+                raise HTTPException(404, "版本 QC 报告不存在")
+            report = json.loads(resolved.read_text(encoding="utf-8"))
+        return {
+            "taskId": task_id,
+            "versionId": version_id,
+            "score": row["qc_score"],
+            "passed": bool(row["qc_passed"]),
+            "report": report,
+        }
+    except (OSError, json.JSONDecodeError):
+        raise HTTPException(404, "版本 QC 报告不存在")
+    finally:
+        db.close()

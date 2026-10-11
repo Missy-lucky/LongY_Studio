@@ -117,6 +117,9 @@ export interface GenTask {
   name: string
   type: TaskType
   itemId: string
+  shotId: string | null
+  shotName: string | null
+  priority: ShotPriority | null
   tier: TaskTier
   status: TaskStatus
   provider: string

@@ -109,6 +109,7 @@ function buildTasksForItem(item: ProductItem, cat: CategoryConfig, models: Model
     const cacheHit = (hashSeed.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % 10) < 3
     return {
       id, code: `T${String(code++).padStart(3, '0')}`, name, type, itemId: item.id,
+      shotId: null, shotName: null, priority: null,
       tier: 'draft', status: cacheHit ? 'cached' : 'planned', provider: 'mock',
       prompt: `${promptCore}。单品：${item.name}；颜色/材质：${item.colorMaterial}；卖点：${item.sellingPoints}。${type === 'model' ? cat.modelPromptHints : ''}`,
       negativePrompt: cat.negativeHints,

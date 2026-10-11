@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, CheckCircle2, FolderDown, Save, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, FolderDown, Save, X, XCircle } from 'lucide-react'
 import { useNodeStore } from '../../stores/node-store'
 
 export function ProviderConfirmDialog() {
@@ -27,6 +27,74 @@ export function ProviderConfirmDialog() {
         <div className="mt-4 flex justify-end gap-2">
           <button onClick={cancel} className="btn btn-secondary">取消</button>
           <button onClick={() => void submit()} disabled={busy} className="btn btn-primary">确认并提交</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function ExportPreviewCoverageDialog() {
+  const preview = useNodeStore(state => state.exportPreview)
+  const close = useNodeStore(state => state.closeExportPreview)
+  const confirm = useNodeStore(state => state.confirmExportLocked)
+  const busy = useNodeStore(state => state.workflowBusy)
+  if (!preview) return null
+
+  const groups = (['flat', 'partial', 'detail', 'model'] as const).map(type => ({
+    type,
+    label: { flat: '平面图', partial: '局部图', detail: '细节图', model: '模特图' }[type],
+    items: preview.coverage.filter(item => item.type === type),
+  })).filter(group => group.items.length > 0)
+
+  return (
+    <div className="fixed inset-0 z-[230] flex items-center justify-center bg-black/65 p-6">
+      <div className="flex max-h-[80vh] w-[680px] flex-col rounded-2xl border" style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-lg)' }}>
+        <div className="flex items-center gap-3 border-b px-5 py-4" style={{ borderColor: 'var(--divider)' }}>
+          <FolderDown size={16} className="text-accent" />
+          <div className="flex-1">
+            <div className="text-sm font-semibold">导出覆盖校验</div>
+            <div className="mt-0.5 truncate text-[11px] text-text-secondary">{preview.exportDir}</div>
+          </div>
+          <button onClick={close} className="btn btn-secondary !px-2 !py-1.5"><X size={13} /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4">
+          {preview.coverageComplete ? (
+            <div className="mb-3 flex items-center gap-2 rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-[11px] text-success">
+              <CheckCircle2 size={13} />必拍镜头覆盖完整：{preview.coverage.length} / {preview.coverage.length}
+            </div>
+          ) : (
+            <div className="mb-3 rounded-lg border border-error/40 bg-error/10 p-3 text-[11px] text-error">
+              <div className="flex items-center gap-2 font-medium"><XCircle size={13} />缺少必拍镜头，导出已被阻止</div>
+              <div className="mt-1 leading-5">{preview.missingShotNames.join('、')}</div>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {groups.map(group => (
+              <div key={group.type} className="overflow-hidden rounded-lg border" style={{ borderColor: 'var(--border)' }}>
+                <div className="border-b px-3 py-2 text-[11px] font-semibold" style={{ borderColor: 'var(--divider)', color: 'var(--text)' }}>
+                  {group.label} · {group.items.length} 个必拍镜头
+                </div>
+                {group.items.map(item => (
+                  <div key={`${item.itemId}-${item.shotId}`} className="flex items-center gap-2 border-b px-3 py-2 text-[11px] last:border-b-0" style={{ borderColor: 'var(--divider)' }}>
+                    {item.ready
+                      ? <CheckCircle2 size={12} className="shrink-0 text-success" />
+                      : <XCircle size={12} className="shrink-0 text-error" />}
+                    <span className="flex-1 truncate">{item.shotName}</span>
+                    <span className="text-text-muted">{item.itemName}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 border-t px-5 py-3" style={{ borderColor: 'var(--divider)' }}>
+          <button onClick={close} className="btn btn-secondary">关闭</button>
+          <button onClick={() => void confirm()} disabled={busy || !preview.coverageComplete} className="btn btn-primary">
+            导出 {preview.files.length} 张
+          </button>
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import type { CategoryAttribute } from '../../../shared/types/domain'
+import type { CategoryAttribute, ShotPriority } from '../../../shared/types/domain'
 
 /** 节点系统类型定义 —— 与设计文档一致 */
 
@@ -85,6 +85,9 @@ export interface OutputNodeData {
   versionId: string | null
   taskCode: string
   taskName: string
+  shotId: string | null
+  shotName: string | null
+  priority: ShotPriority | null
   imageType: ProcessType
   status: OutputStatus
   thumbnail: string | null
@@ -94,6 +97,9 @@ export interface OutputNodeData {
   customPrompt: string | null
   cost: number
   durationMs: number | null
+  tier: 'draft' | 'hd'
+  qcScore: number | null
+  qcPassed: boolean | null
 }
 
 export interface FlowOutputNode extends BaseNode {

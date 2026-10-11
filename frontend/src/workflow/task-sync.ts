@@ -38,10 +38,16 @@ export function syncNodesWithTasks(
       data: {
         ...output.data,
         status: outputStatus(task.status),
+        shotId: task.shotId ?? null,
+        shotName: task.shotName ?? null,
+        priority: task.priority ?? null,
         versionId: task.currentVersionId,
         version: version?.version ?? output.data.version,
         cost: version?.cost ?? output.data.cost,
         durationMs: version?.durationMs ?? output.data.durationMs,
+        tier: task.tier,
+        qcScore: version?.qcScore ?? null,
+        qcPassed: version?.qcPassed ?? null,
         thumbnail: version?.filePath
           ? `/api/projects/${projectId}/tasks/${task.id}/versions/${version.id}/file`
           : null,

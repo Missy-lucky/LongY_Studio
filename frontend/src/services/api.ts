@@ -1,4 +1,4 @@
-import type { ShotTemplate } from '../types/domain'
+import type { ShotPriority, ShotTemplate } from '../types/domain'
 
 const API_ROOT = '/api'
 
@@ -49,9 +49,13 @@ export interface RemoteTask {
   code: string
   name: string
   type: 'flat' | 'detail' | 'partial' | 'model'
+  shotId?: string | null
+  shotName?: string | null
+  priority?: ShotPriority | null
   status: string
   provider: ProviderId | string
   estimatedCost: number
+  tier: 'draft' | 'hd'
   currentVersionId: string | null
   modelId: string | null
   versions: Array<{
@@ -61,6 +65,9 @@ export interface RemoteTask {
     cost: number
     durationMs: number | null
     filePath: string | null
+    qcScore: number | null
+    qcPassed: boolean | null
+    qcReportPath: string | null
   }>
 }
 export interface ProviderInfo {
@@ -71,11 +78,28 @@ export interface ProviderInfo {
   rateLimitPerMin: number
   available?: boolean
 }
+export interface ExportCoverageItem {
+  itemId: string
+  itemName: string
+  shotId: string
+  shotName: string
+  type: RemoteTask['type']
+  ready: boolean
+}
+
 export interface ExportPreviewFile {
   taskId: string
   fileName: string
   folder: string
   conflict: boolean
+}
+
+export interface ExportPreview {
+  files: ExportPreviewFile[]
+  exportDir: string
+  coverageComplete: boolean
+  coverage: ExportCoverageItem[]
+  missingShotNames: string[]
 }
 
 export const api = {
@@ -133,8 +157,18 @@ export const api = {
     }),
   regenerateTask: (projectId: string, taskId: string) =>
     request<{ version: number }>(`/projects/${projectId}/tasks/${taskId}/regenerate`, { method: 'POST' }),
+  startHdRepair: (projectId: string, taskId: string) =>
+    request<{ version: number; versionId: string; tier: 'hd' }>(`/projects/${projectId}/tasks/${taskId}/hd-repair`, { method: 'POST' }),
+  getVersionQc: (projectId: string, taskId: string, versionId: string) =>
+    request<{
+      taskId: string
+      versionId: string
+      score: number | null
+      passed: boolean
+      report: Record<string, unknown> | null
+    }>(`/projects/${projectId}/tasks/${taskId}/versions/${versionId}/qc`),
   exportPreview: (projectId: string) =>
-    request<{ files: ExportPreviewFile[]; exportDir: string }>(`/projects/${projectId}/exports/preview`),
+    request<ExportPreview>(`/projects/${projectId}/exports/preview`),
   exportTasks: (projectId: string, taskIds: string[]) =>
     request<{
       exported: number

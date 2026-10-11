@@ -1,5 +1,58 @@
 # 修改日志
 
+## v0.7.0 — 高清修复与一致性 QC（2026-10-11）
+
+### 高清成品链路
+- `hd` 不再只是分辨率参数，改为两阶段生产链路：
+  1. 基础图生成。
+  2. 专用高清细节修复：面料纹理、缝线、扣件、拉链、口袋、手部、脸部皮肤与身份细节。
+- OpenRouter ICU 高清阶段会把「已审基础图 + 原始服装参考 + 定稿模特参考」重新送入细节修复，不允许只放大构图。
+- 高清修复失败时不会把仅放大图伪装成成品，会返回 `HD_DETAIL_REPAIR_FAILED` 并建议重试。
+- 新增 `POST /api/projects/{projectId}/tasks/{taskId}/hd-repair`，基于当前任务创建新 HD 版本。
+- 输出节点新增「高清修复」按钮；完成后显示 `HD Repair` 档位标识。
+- HD 估算成本调整为两阶段成本，Mock 与 OpenRouter 均为 5。
+- Mock Provider 从 SVG 占位改为真实 PNG，并模拟 HD 细节纹理，保证预览、尺寸、QC 与导出链路可测试。
+- 套图模板声明的输出尺寸优先于 Provider 默认尺寸。
+
+### 一致性 QC
+- 新增 `backend/app/services/consistency_qc.py`，从单一像素 QC 扩展为多信号一致性 QC：
+  - 服装一致性：HSV 分布、感知哈希、ORB 结构匹配与单应性内点。
+  - 模特身份：MediaPipe 面部几何、面部区域外观、身体比例。
+  - 输出细节：Laplacian 清晰度、边缘密度、高频能量、源分辨率。
+  - 原像素 QC：白边、覆盖率、安全边界与尺寸。
+- 模特身份采用保守加权：
+  - 面部几何 45%。
+  - 面部区域结构/颜色 40%。
+  - 身体比例 15%。
+- 使用三位 v2 定稿模特交叉验证：
+  - 同一参考图对比自身：通过。
+  - M1 vs M2：判定身份不一致。
+  - M1 vs M3：判定身份不一致。
+- QC 报告随版本落盘为 `<result>.qc.json`。
+- `task_versions` 新增 `qc_score`、`qc_passed`、`qc_report_path`。
+- 新增 `GET /api/projects/{projectId}/tasks/{taskId}/versions/{versionId}/qc`。
+- 输出节点显示 QC 分数与通过状态。
+- Mock Provider 的 QC 只记录不阻断；真实 Provider 执行一致性阈值并给出失败原因。
+
+### 依赖与模型
+- 新增 `opencv-python-headless`、`mediapipe`。
+- 将已验证的面部与姿态模型纳入 `asset-library/qc-models/`：
+  - `face_landmarker.task`
+  - `pose_landmarker_heavy.task`
+
+### 修复
+- 修复套图模板重复规划时任务编号未递增导致 `UNIQUE(project_id, code)` 失败的问题。
+- 完整全身模特图面部较小时，MediaPipe 会依次尝试上半身裁切并将坐标映射回原图。
+
+### 验证
+- 后端测试：11 passed。
+- TypeScript / Vite 构建：通过。
+- 结构 / 命名 / JSON 资产检查：0 错误。
+- Mock HD 流程验证：draft → HD 新版本 → 1152×1536 PNG → QC 报告落盘 → QC API 可读取。
+
+---
+
+
 ## v0.6.1 — 工程规范与结构治理（2026-10-11）
 
 ### 工程
