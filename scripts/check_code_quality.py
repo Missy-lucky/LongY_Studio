@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -48,8 +50,8 @@ def check_python() -> None:
 
 def check_project_root() -> None:
     allowed_directories = {
-        "__pycache__", "asset-library", "backend", "database", "desktop", "docs",
-        "frontend", "Model", "scripts", "shared", "storage", "temp", "tests", "tools",
+        ".pytest_cache", "__pycache__", "asset-library", "backend", "database", "desktop", "docs",
+        "frontend", "scripts", "shared", "storage", "temp", "tests", "tools",
     }
     allowed_files = {
         ".git", ".gitignore", ".gitattributes", "README.md", "pytest.ini",
@@ -204,11 +206,103 @@ def validate_assets() -> None:
             if key not in prompt:
                 error(f"Prompt template legacy-v2.json missing {key}")
 
+    calibration_file = ROOT / "asset-library" / "prompt-templates" / "example-calibration-v1.json"
+    calibration = read_json(calibration_file)
+    registry = read_json(ROOT / "asset-library" / "qc-rules" / "reference-workbook.json")
+    if isinstance(calibration, dict):
+        if calibration.get("schema") != "longy.prompt-calibration.v1":
+            error("Prompt calibration schema must be longy.prompt-calibration.v1")
+        safeguards = calibration.get("safeguards", {})
+        if set(safeguards) != {"flat", "detail", "partial", "model"}:
+            error("Prompt calibration safeguards must cover flat/detail/partial/model exactly")
+        elif any(not isinstance(rules, list) or not rules for rules in safeguards.values()):
+            error("Every prompt calibration task type must contain safeguards")
+        if isinstance(registry, dict):
+            counts = registry.get("summary", {}).get("byClassification", {})
+            expected = {
+                "approvedReference": counts.get("approved_reference"),
+                "rejectedOutput": counts.get("rejected_output"),
+                "defectEvidence": counts.get("defect_evidence"),
+                "sourceContext": counts.get("source_context"),
+                "unfinishedSource": counts.get("unfinished_source"),
+            }
+            if calibration.get("evidenceSummary") != expected:
+                error("Prompt calibration evidenceSummary does not match reference workbook registry")
+
+    model_root = ROOT / "asset-library" / "model-library"
+    enabled_models: set[str] = set()
+    for model_file in sorted(model_root.glob("*.json")):
+        if model_file.name == "model-styles.json":
+            continue
+        model = read_json(model_file)
+        if not isinstance(model, dict) or not model.get("enabled"):
+            continue
+        model_id = model.get("id")
+        reference_path = model.get("referencePath")
+        if not isinstance(model_id, str) or not model_id:
+            error(f"Enabled model is missing id: {model_file.name}")
+            continue
+        enabled_models.add(model_id)
+        reference = ROOT / reference_path if isinstance(reference_path, str) else None
+        if reference is None or not reference.is_file():
+            error(f"Enabled model reference does not exist: {model_id} -> {reference_path}")
+            continue
+        if not reference.with_name("model-card.jpg").is_file():
+            error(f"Enabled model preview card does not exist: {model_id}")
+    model_styles = read_json(model_root / "model-styles.json")
+    if isinstance(model_styles, list):
+        if any(
+            not isinstance(item, dict) or not isinstance(item.get("modelId"), str)
+            for item in model_styles
+        ):
+            error("Every model style must contain a string modelId")
+        style_model_ids = {
+            item["modelId"]
+            for item in model_styles
+            if isinstance(item, dict) and isinstance(item.get("modelId"), str)
+        }
+        if style_model_ids != enabled_models:
+            error(
+                "Model styles must cover enabled models exactly; "
+                f"missing={sorted(enabled_models - style_model_ids)}, "
+                f"extra={sorted(style_model_ids - enabled_models)}"
+            )
+
+    fallback_manifest = read_json(
+        ROOT / "asset-library" / "default-garments" / "manifest.json"
+    )
+    if isinstance(fallback_manifest, dict):
+        if fallback_manifest.get("schema") != "longy.default-garments.v1":
+            error("Default garment manifest schema must be longy.default-garments.v1")
+        fallback_items = fallback_manifest.get("items", [])
+        roles = {
+            item.get("role") for item in fallback_items if isinstance(item, dict)
+        }
+        if roles != {"upper-base", "lower-base"} or len(fallback_items) != 2:
+            error("Default garment manifest must contain one upper-base and one lower-base")
+        for item in fallback_items:
+            if not isinstance(item, dict):
+                error("Default garment manifest items must be objects")
+                continue
+            relative_path = item.get("path")
+            path = ROOT / relative_path if isinstance(relative_path, str) else None
+            if path is None or not path.is_file():
+                error(f"Default garment file does not exist: {relative_path}")
+                continue
+            actual_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+            if item.get("sha256") != actual_hash:
+                error(f"Default garment SHA-256 mismatch: {relative_path}")
+
 
 def check_tracked_runtime_files() -> None:
-    tracked = [Path(line) for line in __import__("subprocess").check_output(
-        ["git", "ls-files"], cwd=ROOT, text=True, encoding="utf-8", errors="replace"
-    ).splitlines()]
+    result = subprocess.run(
+        ["git", "ls-files"], cwd=ROOT, text=True, encoding="utf-8", errors="replace",
+        capture_output=True, check=False,
+    )
+    if result.returncode != 0:
+        warn("Git tracked-file checks skipped because this workspace is not a Git repository")
+        return
+    tracked = [Path(line) for line in result.stdout.splitlines()]
     for path in tracked:
         normalized = path.as_posix()
         if normalized.startswith(("storage/projects/", "storage/exports/", "storage/cache/", "storage/logs/")):

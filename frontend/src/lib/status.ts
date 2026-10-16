@@ -19,8 +19,8 @@ export const STATUS_ORDER: TaskStatus[] = ['unconfirmed','planned','cached','que
 export const TYPE_META: Record<TaskType, { label: string; icon: string }> = {
   flat:    { label: '平面图', icon: '▦' },
   detail:  { label: '细节图', icon: '◉' },
-  partial: { label: '局部图', icon: '◫' },
-  model:   { label: '模特图', icon: '☺' },
+  partial: { label: '上身商品特写', icon: '◫' },
+  model:   { label: '整套搭配展示', icon: '☺' },
 }
 
 export const STAGE_LABEL: Record<GenerateStage, string> = {

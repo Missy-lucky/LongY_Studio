@@ -15,6 +15,7 @@ os.environ.setdefault("LONGY_MOCK_FAILURE_RATE", "0")
 from fastapi.testclient import TestClient  # noqa: E402
 
 from backend.app.main import app  # noqa: E402
+from backend.app.database import get_db  # noqa: E402
 from backend.app.services.consistency_qc import run_consistency_qc  # noqa: E402
 
 
@@ -44,13 +45,15 @@ def test_model_identity_qc_uses_face_and_pose(client: TestClient):
         model_reference=reference,
         enforce=True,
     )
-    assert report["schema"] == "longy.consistency-qc.v1"
+    assert report["schema"] == "longy.consistency-qc.v2"
     assert report["model"]["faceGeometrySimilarity"] is not None
     assert report["model"]["faceAppearanceSimilarity"] is not None
     assert report["model"]["referencePose"] is not None
     assert report["model"]["outputPose"] is not None
     assert report["model"]["passed"] is True
     assert report["garment"]["passed"] is True
+    assert report["authenticity"]["color"]["status"] == "pass"
+    assert report["authenticity"]["silhouette"]["status"] == "pass"
     assert report["detail"]["laplacianVariance"] > 0
 
 
@@ -95,4 +98,45 @@ def test_mock_hd_repair_creates_new_raster_version_and_qc_report(client: TestCli
     assert qc["report"]["detail"]["sourceWidth"] == 1152
     assert qc["report"]["model"]["score"] is not None
     assert "face_not_detected" in qc["report"]["model"]["reasons"]
+
+    unreviewed_lock = client.post(
+        f"/api/projects/{pid}/tasks/{task['id']}/review",
+        json={"action": "lock"},
+    )
+    assert unreviewed_lock.status_code == 409
+    assert "先点击满意" in unreviewed_lock.json()["detail"]
+
+    db = get_db()
+    try:
+        db.execute(
+            "UPDATE task_versions SET qc_passed=0 WHERE id=?",
+            (version["id"],),
+        )
+        db.commit()
+    finally:
+        db.close()
+    assert client.post(
+        f"/api/projects/{pid}/tasks/{task['id']}/review",
+        json={"action": "accept"},
+    ).status_code == 200
+    blocked_lock = client.post(
+        f"/api/projects/{pid}/tasks/{task['id']}/review",
+        json={"action": "lock"},
+    )
+    assert blocked_lock.status_code == 409
+    assert "QC 未通过" in blocked_lock.json()["detail"]
+
+    db = get_db()
+    try:
+        db.execute(
+            "UPDATE task_versions SET qc_passed=1 WHERE id=?",
+            (version["id"],),
+        )
+        db.commit()
+    finally:
+        db.close()
+    assert client.post(
+        f"/api/projects/{pid}/tasks/{task['id']}/review",
+        json={"action": "lock"},
+    ).status_code == 200
 

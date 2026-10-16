@@ -17,6 +17,10 @@ class MockProvider(ImageProvider):
     name = "Mock 生图引擎"
     supported_tiers = ("draft", "hd")
     price_per_image = {"draft": 1.0, "hd": 5.0}
+    capabilities = {
+        "textToImage": True, "imageEdit": True, "maskEdit": True,
+        "maxReferenceImages": 16, "customBaseUrl": False, "local": True,
+    }
 
     def generate(self, req, on_stage, on_complete, on_error, idempotency_key):
         cancelled = threading.Event()

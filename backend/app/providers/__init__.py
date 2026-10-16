@@ -2,6 +2,9 @@
 from .base import Cancellable, GenerateError, GenerateRequest, GenerateResult, ImageProvider
 from .mock import MockProvider
 from .openrouter_icu import OpenRouterICUProvider
+from .openai_images import OpenAIImagesProvider
+from .volcengine_ark import VolcengineArkProvider
+from .comfyui import ComfyUIProvider
 
 _registry: dict[str, ImageProvider] = {}
 
@@ -17,12 +20,15 @@ def resolve_provider(provider_id: str) -> ImageProvider:
 def list_providers() -> list[dict]:
     out = []
     for p in _registry.values():
+        effective_prices = {tier: p.estimate(tier, 1) for tier in p.supported_tiers}
         item = {
             "id": p.id,
             "name": p.name,
             "supportedTiers": list(p.supported_tiers),
-            "pricePerImage": p.price_per_image,
+            "pricePerImage": effective_prices,
             "rateLimitPerMin": p.rate_limit_per_min,
+            "costEstimateKnown": any(value > 0 for value in effective_prices.values()),
+            "capabilities": p.capabilities,
         }
         availability = getattr(p, "available", None)
         if availability is not None:
@@ -33,3 +39,6 @@ def list_providers() -> list[dict]:
 
 register_provider(MockProvider())
 register_provider(OpenRouterICUProvider())
+register_provider(OpenAIImagesProvider())
+register_provider(VolcengineArkProvider())
+register_provider(ComfyUIProvider())

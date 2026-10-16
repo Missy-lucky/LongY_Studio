@@ -4,8 +4,8 @@
   "category": "scarf",
   "categoryName": "围巾",
   "group": "配饰",
-  "version": "1.0.0",
-  "updatedAt": "2026-10-11",
+  "version": "1.1.0",
+  "updatedAt": "2026-10-16",
   "description": "围巾品类标准电商套图镜头清单。任务规划器按 shots 自动展开任务，按 conditionalShots 与商品属性自动加减镜头，导出前按模板做完整性校验。",
   "attributes": [
     {
@@ -80,13 +80,14 @@
     "partial": [
       {
         "id": "partial-drape",
-        "name": "悬垂形态图",
+        "name": "围巾模特穿搭·悬垂特写",
         "type": "partial",
         "required": false,
         "priority": "P1",
-        "promptHints": "自然悬垂，展示垂坠感",
+        "promptHints": "模特真实穿着或佩戴围巾，紧裁到商品区域，重点呈现悬垂；保留必要的人体连接与自然姿态，商品完整清晰，不从全身成图裁切放大",
         "references": [
-          "garment"
+          "garment",
+          "model-identity"
         ]
       }
     ],

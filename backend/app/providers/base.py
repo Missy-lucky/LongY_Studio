@@ -49,9 +49,27 @@ class ImageProvider(ABC):
     price_per_image: dict[Tier, float]
     rate_limit_per_min: int = 60
     max_retries: int = 2
+    capabilities: dict[str, object] = {
+        "textToImage": True,
+        "imageEdit": True,
+        "maskEdit": False,
+        "maxReferenceImages": 1,
+        "customBaseUrl": False,
+        "local": False,
+    }
 
     def estimate(self, tier: Tier, count: int) -> float:
-        return self.price_per_image.get(tier, 0.0) * count
+        # Vendor prices change. A user-supplied estimate takes precedence over the
+        # bundled fallback so batch/project limits never pretend stale prices are exact.
+        from ..services.provider_config import provider_setting
+
+        key = "pricePerImageDraft" if tier == "draft" else "pricePerImageHd"
+        configured = provider_setting(self.id, key, "")
+        try:
+            unit_price = float(configured) if configured != "" else self.price_per_image.get(tier, 0.0)
+        except ValueError:
+            unit_price = self.price_per_image.get(tier, 0.0)
+        return max(0.0, unit_price) * count
 
     @abstractmethod
     def generate(

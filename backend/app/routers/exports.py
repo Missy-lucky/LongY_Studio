@@ -1,4 +1,6 @@
 """导出接口：仅导出锁定版本，重名不覆盖，写入导出档案。"""
+import hashlib
+import json
 import re
 import shutil
 import uuid
@@ -11,7 +13,12 @@ from ..database import get_db
 from ..services.shot_coverage import project_shot_coverage
 
 router = APIRouter()
-TYPE_FOLDERS = {"flat": "01_平面图", "detail": "02_细节图", "partial": "03_局部图", "model": "04_模特图"}
+TYPE_FOLDERS = {
+    "flat": "01_平面图",
+    "detail": "02_细节图",
+    "partial": "03_模特上身商品特写",
+    "model": "04_模特上身搭配展示",
+}
 
 
 def now() -> str:
@@ -20,6 +27,14 @@ def now() -> str:
 
 def safe_name(s: str) -> str:
     return re.sub(r'[\\/:*?"<>|\s]+', "-", s).strip("-") or "untitled"
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def task_filename(scheme: str, sku: str, item: str, code: str, version: int, suffix: str) -> str:
@@ -47,7 +62,8 @@ def preview(project_id: str, naming_scheme: str = "detailed") -> dict:
             """SELECT t.id,t.code,t.type,v.version,v.file_path,i.name item_name
                FROM tasks t JOIN task_versions v ON v.id=t.current_version_id
                LEFT JOIN items i ON i.id=t.item_id
-               WHERE t.project_id=? AND t.status IN ('locked','exported') ORDER BY t.code""",
+               WHERE t.project_id=? AND t.status IN ('locked','exported')
+                 AND v.qc_passed=1 ORDER BY t.code""",
             (project_id,),
         ).fetchall()
         seen: dict[str, int] = {}
@@ -116,13 +132,26 @@ def export(project_id: str, body: ExportIn) -> dict:
                 409,
                 f"缺少必拍镜头：{'、'.join(coverage['missingShotNames'])}",
             )
+        if body.task_ids:
+            qc_blocked = db.execute(
+                """SELECT t.code FROM tasks t
+                   LEFT JOIN task_versions v ON v.id=t.current_version_id
+                   WHERE t.project_id=? AND t.id IN ({})
+                     AND (v.qc_passed IS NULL OR v.qc_passed!=1)
+                   ORDER BY t.code""".format(",".join("?" for _ in body.task_ids)),
+                (project_id, *body.task_ids),
+            ).fetchall()
+            if qc_blocked:
+                codes = "、".join(row["code"] for row in qc_blocked)
+                raise HTTPException(409, f"以下任务的一致性 QC 未通过，禁止导出：{codes}")
         rows = []
         for tid in body.task_ids:
             row = db.execute(
-                """SELECT t.id,t.code,t.type,v.id version_id,v.version,v.file_path,i.name item_name
+                """SELECT t.id,t.code,t.type,t.provider,t.model_id,v.id version_id,v.version,v.file_path,i.name item_name
                    FROM tasks t JOIN task_versions v ON v.id=t.current_version_id
                    LEFT JOIN items i ON i.id=t.item_id
-                   WHERE t.id=? AND t.project_id=? AND t.status IN ('locked','exported')""",
+                   WHERE t.id=? AND t.project_id=? AND t.status IN ('locked','exported')
+                     AND v.qc_passed=1""",
                 (tid, project_id),
             ).fetchone()
             if row and row["file_path"]:
@@ -154,7 +183,11 @@ def export(project_id: str, body: ExportIn) -> dict:
                            (uuid.uuid4().hex[:12], batch_id, r["id"], r["version_id"], str(out), out.name, now()))
                 db.execute("UPDATE tasks SET status='exported',updated_at=? WHERE id=?", (now(), r["id"]))
                 db.execute("UPDATE task_versions SET status='exported' WHERE id=?", (r["version_id"],))
-                mapping.append({"taskId": r["id"], "written": str(out)})
+                mapping.append({
+                    "taskId": r["id"], "written": str(out), "contentOrigin": "ai-generated",
+                    "provider": r["provider"], "modelId": r["model_id"],
+                    "sourceVersionId": r["version_id"], "sha256": file_sha256(out),
+                })
                 exported += 1
             except Exception as exc:
                 failed.append({"taskId": r["id"], "reason": str(exc)})
@@ -195,15 +228,40 @@ def export(project_id: str, body: ExportIn) -> dict:
                        ) VALUES(?,?,?,?,?,?,?)""",
                     (uuid.uuid4().hex[:12], batch_id, r["asset_id"], r["shot_id"], str(out), out.name, now()),
                 )
-                mapping.append({"assetId": r["asset_id"], "written": str(out)})
+                mapping.append({
+                    "assetId": r["asset_id"], "written": str(out), "contentOrigin": "original",
+                    "shotId": r["shot_id"], "sha256": file_sha256(out),
+                })
                 exported += 1
             except Exception as exc:
                 failed.append({"assetId": r["asset_id"], "reason": str(exc)})
 
-        db.execute("INSERT INTO events(time,project_id,type,message) VALUES(?,?,?,?)",
-                   (now(), project_id, "export.done", f"导出完成：{exported} 张成功，{len(failed)} 张失败"))
+        manifest_path = target / f"LongY-AI-export-manifest-{batch_id}.json"
+        manifest = {
+            "schema": "longy.ai-export-manifest.v1",
+            "batchId": batch_id,
+            "createdAt": now(),
+            "project": {"id": project_id, "sku": proj["sku"], "name": proj["name"]},
+            "containsAiGeneratedContent": any(item.get("contentOrigin") == "ai-generated" for item in mapping),
+            "disclosure": "本清单标记 AI 生成或编辑内容；发布时仍须按目标平台的现行规则完成展示标识。",
+            "files": [
+                {
+                    **item,
+                    "written": str(Path(item["written"]).relative_to(target)),
+                }
+                for item in mapping
+            ],
+            "failed": failed,
+        }
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        db.execute("INSERT INTO events(time,project_id,type,message,payload) VALUES(?,?,?,?,?)",
+                   (now(), project_id, "export.done", f"导出完成：{exported} 张成功，{len(failed)} 张失败；已写入 AI 内容清单",
+                    json.dumps({"batchId": batch_id, "manifestPath": str(manifest_path)}, ensure_ascii=False)))
         db.commit()
-        return {"exported": exported, "mapping": mapping, "failed": failed, "batchId": batch_id, "targetDir": str(target)}
+        return {
+            "exported": exported, "mapping": mapping, "failed": failed,
+            "batchId": batch_id, "targetDir": str(target), "manifestPath": str(manifest_path),
+        }
     finally:
         db.close()
 

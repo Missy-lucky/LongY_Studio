@@ -1,9 +1,10 @@
-"""应用配置：所有运行数据默认限制在项目 storage/ 目录内。"""
+"""应用配置：开发态读取工程目录，打包态读取 PyInstaller 资源目录。"""
+import sys
 from pathlib import Path
 from pydantic import ConfigDict
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2])).resolve()
 
 
 class Settings(BaseSettings):

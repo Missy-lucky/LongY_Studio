@@ -4,8 +4,8 @@
   "category": "slippers",
   "categoryName": "拖鞋",
   "group": "鞋履",
-  "version": "1.0.0",
-  "updatedAt": "2026-10-11",
+  "version": "1.1.0",
+  "updatedAt": "2026-10-16",
   "description": "拖鞋品类标准电商套图镜头清单。任务规划器按 shots 自动展开任务，按 conditionalShots 与商品属性自动加减镜头，导出前按模板做完整性校验。",
   "attributes": [
     {
@@ -96,14 +96,14 @@
     "partial": [
       {
         "id": "partial-on-foot",
-        "name": "上脚静态展示图",
+        "name": "拖鞋模特穿搭·上脚静态特写",
         "type": "partial",
         "required": true,
         "priority": "P0",
-        "promptHints": "脚部静止站立，展示上脚包裹",
+        "promptHints": "模特真实穿着或佩戴拖鞋，紧裁到商品区域，重点呈现上脚静态；保留必要的人体连接与自然姿态，商品完整清晰，不从全身成图裁切放大",
         "references": [
           "garment",
-          "style"
+          "model-identity"
         ]
       }
     ],

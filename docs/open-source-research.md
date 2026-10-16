@@ -1,13 +1,13 @@
 # 开源项目源码研究记录
 
 研究时间：2026-10-11  
-源码位置：`temp/research/open-source/` 与 `temp/archive/failed-langflow/`（只作为临时研究资料，不进入正式源码目录）
+研究时的临时位置：`temp/research/open-source/` 与 `temp/archive/failed-langflow/`（调研完成后已清理，不进入正式源码目录）
 
 ## 研究对象
 
 | 项目 | 研究目的 | 对本项目的采纳 |
 |---|---|---|
-| Comfy-Org/desktop | Windows 桌面端如何管理本地 Python 服务、日志、进程生命周期和资源目录 | 采用“桌面壳 + 本地 sidecar + 独立 storage”的模式；后续 Electron/Tauri 壳只负责窗口和进程，不在 UI 中写业务 |
+| Comfy-Org/desktop | Windows 桌面端如何管理本地 Python 服务、日志、进程生命周期和资源目录 | 已采用“桌面壳 + 本地 sidecar + 独立 storage”的模式；Electron 壳只负责窗口和进程，不在 UI 中写业务 |
 | xyflow/xyflow | React Flow 自定义节点、拖拽、小地图、边渲染和受控状态更新 | 保持 `@xyflow/react` 作为流程画布；节点类型、连线类型和小地图集中在 `frontend/src/components/nodes` |
 | langflow-ai/langflow | 节点工作流与 Python 后端的组织方式 | 网络不稳定导致 sparse checkout 未完整展开；已移动到 `temp/archive/failed-langflow/`，未直接复制代码 |
 
@@ -33,7 +33,7 @@
 - `backend/app/queue/` 做任务生命周期。
 - `backend/app/providers/` 做 Provider 生命周期。
 - `storage/` 保存数据库、素材、缓存、日志和导出。
-- 后续在 `desktop/electron/main.cjs` 增加 FastAPI sidecar 拉起与健康检查。
+- `desktop/electron/main.cjs` 已实现 FastAPI sidecar 隐藏拉起、身份化健康检查、启动超时、日志落盘和退出回收。
 
 ## React Flow 的关键启发
 

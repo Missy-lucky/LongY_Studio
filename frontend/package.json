@@ -23,10 +23,21 @@
       "output": "../temp/build/release"
     },
     "files": [
-      "dist/**/*",
       "electron/**/*",
       "desktop-electron/**/*",
       "build/icon.png"
+    ],
+    "extraResources": [
+      {
+        "from": "../temp/build/sidecar/longy-sidecar",
+        "to": "sidecar",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "dist",
+        "to": "web",
+        "filter": ["**/*"]
+      }
     ],
     "win": {
       "target": [

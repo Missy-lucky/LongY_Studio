@@ -1,0 +1,351 @@
+{
+  "schema": "longy.shot-template.v1",
+  "id": "casualPants-shot-v1",
+  "category": "casualPants",
+  "categoryName": "休闲裤",
+  "group": "下装",
+  "version": "1.1.0",
+  "updatedAt": "2026-10-16",
+  "description": "休闲裤二级品类标准电商套图镜头清单。",
+  "attributes": [
+    {
+      "key": "hasDrawstring",
+      "label": "抽绳",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "key": "hasPocket",
+      "label": "口袋",
+      "type": "boolean",
+      "default": true
+    }
+  ],
+  "defaults": {
+    "tier": "draft",
+    "outputByType": {
+      "flat": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "partial": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      },
+      "detail": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "model": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      }
+    },
+    "referenceRoles": {
+      "garment": "商品原始图，结构与颜色的唯一权威来源",
+      "model-identity": "v2 定稿模特身份参考，锁定脸型与身形",
+      "style": "商业展示风格参考，只借构图与光线，不借人和衣服"
+    }
+  },
+  "shots": {
+    "flat": [
+      {
+        "id": "flat-front",
+        "name": "正面平铺图",
+        "type": "flat",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "正面完整平铺，双腿裤线对齐，纯白背景，四周留白充足",
+        "references": [
+          "garment"
+        ],
+        "platformUse": "主图第1张，详情页首屏"
+      },
+      {
+        "id": "flat-back",
+        "name": "背面平铺图",
+        "type": "flat",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "背面完整平铺，与正面同比例同构图，后口袋与后中缝完整呈现",
+        "references": [
+          "garment"
+        ],
+        "platformUse": "详情页版型结构屏"
+      }
+    ],
+    "partial": [
+      {
+        "id": "partial-worn-1",
+        "name": "休闲裤模特穿搭·腰部正面穿着特写",
+        "type": "partial",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "模特真实穿着或佩戴休闲裤，紧裁到商品区域，重点呈现腰部正面穿着；保留必要的人体连接与自然姿态，商品完整清晰，不从全身成图裁切放大",
+        "references": [
+          "garment",
+          "model-identity"
+        ]
+      },
+      {
+        "id": "partial-worn-2",
+        "name": "休闲裤模特穿搭·腿部版型穿着特写",
+        "type": "partial",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "模特真实穿着或佩戴休闲裤，紧裁到商品区域，重点呈现腿部版型穿着；保留必要的人体连接与自然姿态，商品完整清晰，不从全身成图裁切放大",
+        "references": [
+          "garment",
+          "model-identity"
+        ]
+      }
+    ],
+    "detail": [
+      {
+        "id": "detail-waistband",
+        "name": "腰头特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "腰头宽度、缝线与口袋开口位置",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-fly",
+        "name": "门襟特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "门襟扣件或拉链结构，双线走线清晰",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-front-pocket",
+        "name": "前口袋特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "口袋开口角度与袋布缝线",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-hem",
+        "name": "裤脚特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "裤脚收口方式与缝线，展示脚口宽度",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-fabric",
+        "name": "面料纹理特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "微距展示面料织法与垂坠感，斜侧光",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-side-seam",
+        "name": "侧缝线特写",
+        "type": "detail",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "侧缝走线与骨位",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "model": [
+      {
+        "id": "model-front-full",
+        "name": "正面全身模特图",
+        "type": "model",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "正面站姿，展示腰线与裤型，鞋裤衔接自然",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ],
+        "platformUse": "主图第2张"
+      },
+      {
+        "id": "model-back-full",
+        "name": "背面全身模特图",
+        "type": "model",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "背面站姿，展示后口袋位置与臀部版型",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      },
+      {
+        "id": "model-side-full",
+        "name": "侧面全身模特图",
+        "type": "model",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "侧面站姿，展示裤腿弧度与前后裆比例",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      },
+      {
+        "id": "model-walking",
+        "name": "行走动态模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "自然行走，裤腿随步伐微动",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      },
+      {
+        "id": "model-waist-closeup",
+        "name": "腰腹特写模特图",
+        "type": "model",
+        "required": true,
+        "priority": "P1",
+        "promptHints": "取腰部到膝上，展示腰头门襟与口袋上身位置",
+        "references": [
+          "garment",
+          "model-identity"
+        ]
+      },
+      {
+        "id": "model-hem-closeup",
+        "name": "裤脚特写模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "裤脚与鞋面衔接，展示堆叠感或收口",
+        "references": [
+          "garment",
+          "model-identity"
+        ]
+      },
+      {
+        "id": "model-sitting",
+        "name": "坐姿模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P2",
+        "promptHints": "坐姿展示膝盖处版型，适合牛仔休闲款",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      }
+    ]
+  },
+  "conditionalShots": [
+    {
+      "when": {
+        "attribute": "hasDrawstring",
+        "equals": true
+      },
+      "add": [
+        {
+          "id": "detail-drawstring",
+          "name": "抽绳特写",
+          "type": "detail",
+          "required": false,
+          "priority": "P1",
+          "promptHints": "严格依据商品原图展示抽绳结构与工艺，不添加不存在的细节",
+          "references": [
+            "garment"
+          ]
+        }
+      ]
+    },
+    {
+      "when": {
+        "attribute": "hasPocket",
+        "equals": true
+      },
+      "add": [
+        {
+          "id": "detail-pocket",
+          "name": "口袋特写",
+          "type": "detail",
+          "required": false,
+          "priority": "P1",
+          "promptHints": "严格依据商品原图展示口袋结构与工艺，不添加不存在的细节",
+          "references": [
+            "garment"
+          ]
+        }
+      ]
+    }
+  ],
+  "detailPageModules": [
+    {
+      "id": "module-scene",
+      "name": "场景生活图",
+      "priority": "P1",
+      "generate": true,
+      "promptHints": "通勤街拍或休闲场景，展示裤型与搭配"
+    },
+    {
+      "id": "module-selling-points",
+      "name": "卖点图",
+      "priority": "P0",
+      "generate": true,
+      "promptHints": "围绕面料腰头版型卖点，预留文案排版空间"
+    },
+    {
+      "id": "module-size-chart",
+      "name": "尺码表",
+      "priority": "P0",
+      "generate": false,
+      "note": "按平台规格用设计模板输出，不走AI生图"
+    },
+    {
+      "id": "module-care",
+      "name": "洗护说明",
+      "priority": "P2",
+      "generate": false,
+      "note": "固定设计模板"
+    }
+  ],
+  "platformPresets": {
+    "taobao": {
+      "mainImages": [
+        "flat-front",
+        "model-front-full",
+        "detail-fabric",
+        "module-scene",
+        "module-selling-points"
+      ],
+      "minSize": "800x800",
+      "recommendedSize": "1200x1200"
+    }
+  }
+}

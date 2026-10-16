@@ -1,11 +1,11 @@
 # LongY Studio 架构说明
 
-LongY Studio 是一个 Windows 桌面端服饰电商 AI 套图工作流软件。v0.6 在可运行单机闭环上完成项目恢复、项目库切换、Provider 选择、真实调用确认、任务审核锁定、导出、队列状态、菜单化文件入口与自动节点布局；Mock 仍是默认测试 Provider，不消耗真实 API。
+LongY Studio 是一个 Windows 桌面端服饰电商 AI 套图工作流软件。当前已完成项目恢复、项目库切换、Provider 选择与安全配置、真实调用确认、任务审核锁定、导出、队列状态、菜单化文件入口与自动节点布局；Mock 仍是默认测试 Provider，不消耗真实 API。
 
 ## 总体架构
 
 ```text
-desktop/electron        桌面窗口、窗口 IPC、后续 sidecar 拉起
+desktop/electron        桌面窗口、窗口 IPC、sidecar 启停与健康检查
         ↓
 frontend/               React + TypeScript + React Flow 单工作台
         ↓ HTTP / WebSocket（后续增量事件）
@@ -17,6 +17,8 @@ storage/                SQLite 文件、素材、缓存、日志、导出结果
 temp/                   研究源码、构建产物、缓存、测试数据
 ```
 
+开发态由 `main.py` 启动 FastAPI、Vite 与 Electron。打包态由 Electron 隐藏启动内嵌的 PyInstaller sidecar；sidecar 同时提供 `/api/*` 和打包前端静态资源，因此发行版不依赖 Vite、Python 或外部后端进程。
+
 ## 关键原则
 
 1. **单一事实源**：任务、版本、成本和事件以后端 SQLite 为准；前端状态只做交互缓存。
@@ -27,6 +29,8 @@ temp/                   研究源码、构建产物、缓存、测试数据
 6. **文件与数据库分离**：SQLite 只存相对路径，图片和导出文件保存在 `storage/`。
 7. **临时产物集中**：所有构建、缓存、测试、研究源码和截图进入 `temp/`。
 8. **旧版能力复用**：已验证的 v2 模特身份、平面图参考图、提示词与像素 QC 进入正式规则库 / 服务层；`Model/` 只作只读历史资料源。
+9. **密钥隔离**：云端 API Key 只进入 Windows Credential Manager，不写 SQLite、项目 JSON、日志或前端响应。
+10. **官方接口优先**：OpenAI Images API 与火山方舟 Image generation API 直接接入；本地生成通过 ComfyUI HTTP API 工作流，不依赖网页自动化。
 
 ## 后端任务状态机
 
@@ -60,7 +64,7 @@ temp/        可再生临时资料
 统一主入口：
 
 ```powershell
-cd C:\Users\20574\Desktop\LongY_Studio
+cd D:\BaiduNetdiskDownload\LongY_Studio
 python main.py
 ```
 
@@ -86,7 +90,7 @@ python main.py --web
 .\scripts\package.ps1
 ```
 
-构建输出在 `temp/build/`，不会向项目根目录散落产物。当前已生成安装包：`temp/build/release/LongY Studio Setup 0.1.0.exe` 与便携版 `LongY Studio 0.1.0.exe`。
+构建输出在 `temp/build/`，不会向项目根目录散落产物。`package.ps1` 先冻结后端、再生成安装版与便携版，最后执行真实 Electron → sidecar 启动/关闭自检。生成的 `LongY Studio Setup 0.1.0.exe` 与便携版 `LongY Studio 0.1.0.exe` 是本地可再生产物，不提交到 Git。
 
 
 

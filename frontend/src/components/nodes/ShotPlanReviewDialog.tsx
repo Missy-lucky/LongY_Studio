@@ -1,13 +1,13 @@
 import { useState } from 'react'
-import { Ban, Check, CircleSlash, Image as ImageIcon, ListChecks, Plus, X } from 'lucide-react'
+import { Ban, Check, CircleSlash, Image as ImageIcon, ListChecks, Plus, Wand2, X } from 'lucide-react'
 import { useNodeStore } from '../../stores/node-store'
 import type { ShotPlanPreview, ShotPlanShot } from '../../services/api'
 
 const TYPE_LABEL: Record<ShotPlanShot['type'], string> = {
   flat: '平面',
-  partial: '局部',
+  partial: '上身商品特写',
   detail: '细节',
-  model: '模特',
+  model: '整套搭配',
 }
 
 const PRIORITY_STYLE: Record<ShotPlanShot['priority'], { color: string; label: string }> = {
@@ -41,6 +41,10 @@ export function ShotPlanReviewDialog() {
   const [custom, setCustom] = useState<CustomShotForm>(EMPTY_CUSTOM)
 
   if (!plan) return null
+
+  const usesModelOutput = plan.items.some(item => item.shots.some(
+    shot => shot.status === 'selected' && (shot.type === 'partial' || shot.type === 'model'),
+  ))
 
   const setStatus = (itemId: string, item: ShotPlanPreview['items'][number], shot: ShotPlanShot, status: ShotPlanShot['status']) => {
     if (status === 'selected') {
@@ -110,6 +114,30 @@ export function ShotPlanReviewDialog() {
             <CircleSlash size={11}/>全部取消
           </button>
         </div>
+
+        {usesModelOutput && plan.outfitFallbacks.length > 0 && (
+          <div className="border-b px-5 py-3" style={{ borderColor: 'var(--divider)', background: 'var(--bg-2)' }}>
+            <div className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-text-muted">
+              系统将补齐缺失衣层
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {plan.outfitFallbacks.map(fallback => (
+                <div key={fallback.id} className="flex min-w-[250px] items-center gap-3 rounded-lg border p-2"
+                  style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+                  <img src={fallback.previewUrl} alt={fallback.name} loading="lazy"
+                    className="h-14 w-14 rounded-md border object-contain"
+                    style={{ borderColor: 'var(--border)', background: '#fff' }} />
+                  <div className="min-w-0">
+                    <div className="truncate text-xs font-medium">{fallback.name}</div>
+                    <div className="mt-0.5 text-[10px] leading-4 text-text-muted">
+                      {fallback.reason} · 仅用于模特图，不遮挡售卖商品
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="flex-1 space-y-4 overflow-y-auto p-4">
           {plan.items.map(item => (
@@ -191,9 +219,30 @@ export function ShotPlanReviewDialog() {
                           ))}
                         </select>
                       ) : (
-                        <div className="mt-0.5 truncate text-[10px] text-text-muted">
-                          {shot.promptHints || '无附加镜头提示'}
-                        </div>
+                        <>
+                          <div className="mt-0.5 flex min-w-0 items-center gap-2">
+                            <div className="min-w-0 flex-1 truncate text-[10px] text-text-muted">
+                              {shot.promptHints || '无附加镜头提示'}
+                            </div>
+                            <button
+                              onClick={() => updateSelection(item.itemId, shot.shotId, {
+                                promptMode: shot.promptMode === 'custom' ? 'default' : 'custom',
+                              })}
+                              className="shrink-0 text-[9px] text-primary hover:underline">
+                              <Wand2 size={10} className="inline"/> {shot.promptMode === 'custom' ? '使用默认提示词' : '自定义提示词'}
+                            </button>
+                          </div>
+                          {shot.promptMode === 'custom' && (
+                            <textarea
+                              value={shot.customPrompt}
+                              onChange={event => updateSelection(item.itemId, shot.shotId, { customPrompt: event.target.value })}
+                              rows={2}
+                              maxLength={6000}
+                              placeholder="补充构图、场景或细节要求；商品真实性和结构锁定规则仍会保留"
+                              className="input mt-1.5 w-full resize-y !py-1.5 !text-[10px] leading-4"
+                            />
+                          )}
+                        </>
                       )}
                     </div>
 

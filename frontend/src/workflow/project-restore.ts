@@ -3,14 +3,18 @@ import type {
   FlowEdge,
   FlowInputNode,
   FlowModelNode,
+  FlowPoseNode,
+  FlowReferenceNode,
+  FlowCareInputNode,
+  FlowCareOutputNode,
   FlowOutputNode,
   FlowProcessingNode,
   ProcessType,
 } from '../types/node-system'
 import { DEFAULT_INPUT_NODES, MODEL_STYLES, findCategory } from '../data/preset-categories'
 import { PROCESS_ORDER, PROCESS_TITLES } from '../data/process-templates'
-import type { RemoteAsset, RemoteTask } from '../services/api'
-import { inputPosition, modelPosition, organizeNodes, outputPosition } from './node-layout'
+import type { RemoteAsset, RemoteCareCard, RemoteItem, RemoteModel, RemoteProjectReference, RemoteTask } from '../services/api'
+import { careInputPosition, careOutputPosition, inputPosition, modelPosition, organizeNodes, outputPosition, referencePosition } from './node-layout'
 import { outputStatus } from './task-sync'
 
 export interface RestoredProjectGraph {
@@ -21,8 +25,12 @@ export interface RestoredProjectGraph {
 interface BuildProjectGraphInput {
   projectId: string
   assets: RemoteAsset[]
+  items?: RemoteItem[]
   tasks: RemoteTask[]
   selectedModelId?: string | null
+  models?: RemoteModel[]
+  references?: RemoteProjectReference[]
+  careCards?: RemoteCareCard[]
   createId: (prefix: string) => string
 }
 
@@ -33,13 +41,21 @@ function modelReferenceUrl(modelId?: string) {
 export function buildRestoredProjectGraph({
   projectId,
   assets,
+  items = [],
   tasks,
   selectedModelId,
+  models = [],
+  references = [],
+  careCards = [],
   createId,
 }: BuildProjectGraphInput): RestoredProjectGraph {
-  const selectedStyle = MODEL_STYLES.find(style => style.id === selectedModelId) ?? MODEL_STYLES[0]
-  const inputNodes: FlowInputNode[] = assets.map((asset, index) => {
+  const selectedRemoteModel = models.find(model => model.id === selectedModelId)
+  const selectedStyle = MODEL_STYLES.find(style => style.modelId === selectedModelId) ?? MODEL_STYLES[0]
+  const garmentAssets = assets.filter(asset => asset.itemId && asset.categoryId)
+  const itemsById = new Map(items.map(item => [item.id, item]))
+  const inputNodes: FlowInputNode[] = garmentAssets.map((asset, index) => {
     const category = findCategory(asset.categoryId || 'top') ?? findCategory('top')!
+    const item = itemsById.get(asset.itemId || '')
     return {
       id: `asset-${asset.id}`,
       type: 'input' as const,
@@ -49,8 +65,11 @@ export function buildRestoredProjectGraph({
         categoryId: category.id,
         categoryName: category.name,
         categoryGroup: category.group,
+        parentCategoryId: category.parentId,
         attributeOptions: [],
-        attributes: {},
+        attributes: item?.attributes ?? {},
+        structureFieldOptions: [],
+        structureFacts: item?.structureFacts ?? {},
         status: 'confirmed' as const,
         image: {
           id: asset.id,
@@ -76,8 +95,11 @@ export function buildRestoredProjectGraph({
         categoryId: category.id,
         categoryName: category.name,
         categoryGroup: category.group,
+        parentCategoryId: category.parentId,
         attributeOptions: [],
         attributes: {},
+        structureFieldOptions: [],
+        structureFacts: {},
         image: null,
         status: 'empty' as const,
       },
@@ -91,13 +113,58 @@ export function buildRestoredProjectGraph({
     position: modelPosition(allInputs.length),
     collapsed: false,
     data: {
-      styleId: selectedStyle.id,
-      styleName: selectedStyle.name,
-      styleGroup: selectedStyle.group,
-      modelImage: modelReferenceUrl(selectedStyle.modelId),
+      modelId: selectedRemoteModel?.id ?? selectedStyle.modelId,
+      styleId: selectedRemoteModel?.id ?? selectedStyle.id,
+      styleName: selectedRemoteModel?.name ?? selectedStyle.name,
+      styleGroup: selectedRemoteModel?.source === 'custom' ? '自定义模特' : selectedStyle.group,
+      modelImage: selectedRemoteModel?.referenceUrl ?? modelReferenceUrl(selectedStyle.modelId),
       locked: true,
+      source: selectedRemoteModel?.source ?? 'builtin',
     },
   }
+
+  const referenceNodes = references.map((reference, index): FlowPoseNode | FlowReferenceNode => {
+    const base = {
+      id: `reference-${reference.id}`,
+      position: referencePosition(allInputs.length, index),
+      collapsed: false,
+    }
+    const data = {
+      referenceId: reference.id,
+      name: reference.name,
+      image: `/api/projects/${projectId}/references/${reference.id}/file`,
+    }
+    if (reference.role === 'pose') {
+      return { ...base, type: 'pose', data: { ...data, role: 'pose' } }
+    }
+    return { ...base, type: 'reference', data: { ...data, role: reference.role } }
+  })
+
+  const careInputNode: FlowCareInputNode = {
+    id: 'care-input',
+    type: 'careInput',
+    position: careInputPosition(allInputs.length, referenceNodes.length),
+    collapsed: false,
+    data: {
+      cardCount: careCards.length,
+      latestProductName: careCards[0]?.productName ?? '',
+    },
+  }
+  const careOutputNodes: FlowCareOutputNode[] = careCards.map((card, index) => ({
+    id: `care-output-${card.id}`,
+    type: 'careOutput',
+    position: careOutputPosition(allInputs.length, referenceNodes.length, index),
+    collapsed: false,
+    data: {
+      cardId: card.id,
+      productName: card.productName || '洗护与成分说明',
+      brand: card.brand,
+      compositionSummary: card.data.composition
+        .map(part => `${part.name}${part.percent}%`)
+        .join(' / '),
+      thumbnail: `/api/projects/${projectId}/care-cards/${card.id}/file`,
+    },
+  }))
 
   const processNodes: FlowProcessingNode[] = PROCESS_ORDER.map((processType, index) => ({
     id: `proc-${processType}`,
@@ -153,6 +220,8 @@ export function buildRestoredProjectGraph({
         tier: task.tier,
         qcScore: version?.qcScore ?? null,
         qcPassed: version?.qcPassed ?? null,
+        errorCode: version?.errorCode ?? null,
+        errorMessage: version?.errorMessage ?? null,
         versions: task.versions,
       },
     }
@@ -176,8 +245,34 @@ export function buildRestoredProjectGraph({
   edges.push({
     id: 'edge-model',
     source: modelNode.id,
+    target: processNodes.find(node => node.data.processType === 'partial')!.id,
+    edgeType: 'model',
+  })
+  edges.push({
+    id: 'edge-model-display',
+    source: modelNode.id,
     target: processNodes.find(node => node.data.processType === 'model')!.id,
     edgeType: 'model',
+  })
+  referenceNodes.forEach(reference => {
+    if (reference.type === 'pose') {
+      edges.push({
+        id: `edge-model-${reference.id}`,
+        source: modelNode.id,
+        target: reference.id,
+        edgeType: 'pose',
+      })
+      return
+    }
+    const targetTypes: ProcessType[] = reference.data.role === 'detail'
+      ? ['detail', 'partial']
+      : ['flat', 'detail', 'partial', 'model']
+    targetTypes.forEach(type => edges.push({
+      id: `edge-${reference.id}-${type}`,
+      source: reference.id,
+      target: processNodes.find(node => node.data.processType === type)!.id,
+      edgeType: 'reference',
+    }))
   })
   outputNodes.forEach(output => edges.push({
     id: `edge-output-${output.data.taskId}`,
@@ -185,9 +280,18 @@ export function buildRestoredProjectGraph({
     target: output.id,
     edgeType: 'output',
   }))
+  careOutputNodes.forEach(output => edges.push({
+    id: `edge-care-${output.data.cardId}`,
+    source: careInputNode.id,
+    target: output.id,
+    edgeType: 'care',
+  }))
 
   return {
-    nodes: organizeNodes([...allInputs, modelNode, ...processNodes, ...outputNodes]),
+    nodes: organizeNodes([
+      ...allInputs, modelNode, ...referenceNodes, careInputNode, ...careOutputNodes,
+      ...processNodes, ...outputNodes,
+    ]),
     edges,
   }
 }

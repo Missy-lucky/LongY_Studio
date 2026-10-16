@@ -1,13 +1,14 @@
 import { create } from 'zustand'
 import type {
-  AnyFlowNode, FlowEdge, FlowInputNode, FlowModelNode, FlowProcessingNode, FlowOutputNode,
-  UploadedImage, ProcessType,
+  AnyFlowNode, FlowEdge, FlowInputNode, FlowModelNode, FlowPoseNode, FlowReferenceNode,
+  FlowCareInputNode, FlowCareOutputNode, FlowProcessingNode, FlowOutputNode,
+  UploadedImage, ProcessType, ProjectReferenceRole,
 } from '../types/node-system'
 import { DEFAULT_INPUT_NODES, MODEL_STYLES, findCategory } from '../data/preset-categories'
 import { PROCESS_ORDER, PROCESS_TITLES } from '../data/process-templates'
-import { api, type ConsistencyQcReport, type ExportPreview, type ProjectEvent, type ProviderInfo, type RemoteProject, type RemoteTask, type ShotPlanPreview, type ShotSelectionInput } from '../services/api'
+import { api, type CareCardPayload, type ConsistencyQcReport, type ExportPreview, type ModelReferenceAngle, type ProjectEvent, type ProviderInfo, type RemoteAsset, type RemoteCareCard, type RemoteModel, type RemoteProject, type RemoteProjectReference, type RemoteTask, type ShotPlanPreview, type ShotSelectionInput } from '../services/api'
 import { applyModelSelection } from '../workflow/model-selection'
-import { inputPosition, modelPosition, organizeNodes, outputPosition } from '../workflow/node-layout'
+import { careInputPosition, careOutputPosition, inputPosition, modelPosition, organizeNodes, outputPosition, referencePosition } from '../workflow/node-layout'
 import { applyProjectLayout, buildProjectLayout, extractGenerationConfig } from '../workflow/layout-persistence'
 import { buildRestoredProjectGraph } from '../workflow/project-restore'
 import { activeBackendStatus, syncNodesWithTasks } from '../workflow/task-sync'
@@ -77,6 +78,7 @@ export interface ExportResultState {
   failed: Array<{ taskId?: string; assetId?: string; reason: string }>
   files: Array<{ taskId?: string; assetId?: string; written: string }>
   targetDir: string
+  manifestPath: string
 }
 
 export interface ExportSelectionState {
@@ -100,10 +102,17 @@ export interface NodeStoreState {
   projectMeta: RemoteProject | null
   draftProjectMeta: Partial<RemoteProject>
   projectSettingsOpen: boolean
+  providerSettingsOpen: boolean
   projectLibraryOpen: boolean
   fitViewCounter: number
   providerId: ProviderInfo['id']
   providers: ProviderInfo[]
+  availableModels: RemoteModel[]
+  projectReferences: RemoteProjectReference[]
+  careCards: RemoteCareCard[]
+  careSourceAssets: RemoteAsset[]
+  careDialogOpen: boolean
+  careEditingCardId: string | null
   generationTypes: ProcessType[]
   inputGenerationTypes: Record<string, ProcessType[]>
   promptRevisionNodeId: string | null
@@ -131,6 +140,7 @@ export interface NodeStoreState {
   restoreProject: (projectId: string) => Promise<void>
   setProviderId: (providerId: ProviderInfo['id']) => void
   setProjectSettingsOpen: (open: boolean) => void
+  setProviderSettingsOpen: (open: boolean) => void
   setProjectLibraryOpen: (open: boolean) => void
   openProject: (projectId: string) => Promise<void>
   requestFitView: () => void
@@ -145,6 +155,7 @@ export interface NodeStoreState {
   refreshWorkflowEvents: () => Promise<void>
   pauseTaskQueue: () => Promise<void>
   resumeTaskQueue: () => Promise<void>
+  recoverProviderQueue: () => Promise<void>
   cancelQueuedOrRunning: (nodeIds: string[]) => Promise<void>
   retryFailedOutputs: () => Promise<void>
   setGenerationTypes: (types: ProcessType[]) => void
@@ -154,20 +165,30 @@ export interface NodeStoreState {
   openPromptRevision: (nodeId: string | null) => void
   setShotPlanTypes: (types: ProcessType[]) => void
   addInputNode: (categoryId: string) => void
-  removeNode: (nodeId: string) => void
+  removeNode: (nodeId: string) => Promise<void>
   uploadImage: (nodeId: string, image: UploadedImage, file?: File) => void
   changeNodeType: (nodeId: string, categoryId: string) => void
   loadInputAttributes: (nodeId: string) => Promise<void>
   setInputAttribute: (nodeId: string, attributeKey: string, checked: boolean) => void
+  setInputStructureFact: (nodeId: string, fieldKey: string, value: string) => void
+  saveInputFacts: (nodeId: string) => Promise<void>
   setChangeTypeTargetNodeId: (nodeId: string | null) => void
   setModelStyle: (styleId: string) => void
+  uploadCustomModel: (file: File, authorization: { rightsBasis: 'self' | 'licensed' | 'consent'; rightsNote: string }) => Promise<void>
+  uploadModelReference: (modelId: string, file: File, angle: Exclude<ModelReferenceAngle, 'front'>) => Promise<void>
+  uploadProjectReference: (file: File, role: ProjectReferenceRole) => Promise<void>
+  removeProjectReference: (nodeId: string) => Promise<void>
+  openCareEditor: (cardId?: string | null) => void
+  closeCareEditor: () => void
+  saveCareCard: (payload: CareCardPayload, cardId?: string | null) => Promise<void>
+  uploadCareSource: (file: File) => Promise<RemoteAsset | null>
   generatePlan: () => Promise<void>
   confirmShotPlan: () => Promise<void>
   closeShotPlan: () => void
   updateShotPlanSelection: (
     itemId: string,
     shotId: string,
-    patch: Partial<Pick<ShotPlanPreview['items'][number]['shots'][number], 'status' | 'source' | 'assetId' | 'reason'>>,
+    patch: Partial<Pick<ShotPlanPreview['items'][number]['shots'][number], 'status' | 'source' | 'assetId' | 'reason' | 'promptMode' | 'customPrompt'>>,
   ) => void
   addCustomShot: (itemId: string, shot: { name: string; type: RemoteTask['type']; priority: ShotPlanPreview['items'][number]['shots'][number]['priority']; promptHints: string }) => void
   startGeneration: () => Promise<void>
@@ -250,6 +271,38 @@ function ensureProject(): Promise<string> {
   return projectPromise
 }
 
+function careGraphNodes(
+  cards: RemoteCareCard[],
+  projectId: string,
+  inputCount: number,
+  referenceCount: number,
+): Array<FlowCareInputNode | FlowCareOutputNode> {
+  const input: FlowCareInputNode = {
+    id: 'care-input',
+    type: 'careInput',
+    position: careInputPosition(inputCount, referenceCount),
+    collapsed: false,
+    data: {
+      cardCount: cards.length,
+      latestProductName: cards[0]?.productName ?? '',
+    },
+  }
+  const outputs: FlowCareOutputNode[] = cards.map((card, index) => ({
+    id: `care-output-${card.id}`,
+    type: 'careOutput',
+    position: careOutputPosition(inputCount, referenceCount, index),
+    collapsed: false,
+    data: {
+      cardId: card.id,
+      productName: card.productName || '洗护与成分说明',
+      brand: card.brand,
+      compositionSummary: card.data.composition.map(part => `${part.name}${part.percent}%`).join(' / '),
+      thumbnail: `/api/projects/${projectId}/care-cards/${card.id}/file?t=${encodeURIComponent(card.updatedAt)}`,
+    },
+  }))
+  return [input, ...outputs]
+}
+
 function applyTasks(tasks: RemoteTask[]): void {
   const projectId = useNodeStore.getState().backendProjectId
   if (!projectId) return
@@ -261,6 +314,9 @@ function applyTasks(tasks: RemoteTask[]): void {
 }
 function applyProjectEvents(events: ProjectEvent[]): void {
   if (!events.length) return
+  const latestQueueEvent = [...events].reverse().find(event => [
+    'queue.auto_pause', 'queue.pause', 'queue.resume', 'queue.provider_recover',
+  ].includes(event.type))
   const stageUpdates: Record<string, { stage: string; message: string; eventId: number }> = {}
   events.forEach(event => {
     if (!event.taskId || !event.type.startsWith('task.stage.')) return
@@ -274,6 +330,10 @@ function applyProjectEvents(events: ProjectEvent[]): void {
     taskStages: { ...state.taskStages, ...stageUpdates },
     workflowEvents: [...events].reverse().concat(state.workflowEvents).slice(0, 300),
     workflowEventLastId: Math.max(state.workflowEventLastId, ...events.map(event => event.id)),
+    queuePaused: latestQueueEvent
+      ? ['queue.auto_pause', 'queue.pause'].includes(latestQueueEvent.type)
+      : state.queuePaused,
+    workflowMessage: latestQueueEvent?.message ?? state.workflowMessage,
   }))
 }
 
@@ -329,10 +389,17 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
   projectMeta: null,
   draftProjectMeta: { sku: '', name: '节点工作台项目', platform: 'local', style: 'v2 final', budget: 100 },
   projectSettingsOpen: false,
+  providerSettingsOpen: false,
   projectLibraryOpen: false,
   fitViewCounter: 0,
   providerId: 'mock',
   providers: [],
+  availableModels: [],
+  projectReferences: [],
+  careCards: [],
+  careSourceAssets: [],
+  careDialogOpen: false,
+  careEditingCardId: null,
   generationTypes: ['flat', 'partial', 'detail', 'model'],
   inputGenerationTypes: {},
   promptRevisionNodeId: null,
@@ -369,8 +436,8 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
         position: inputPosition(i),
         collapsed: false,
         data: {
-          categoryId: cat.id, categoryName: cat.name, categoryGroup: cat.group,
-          attributeOptions: [], attributes: {},
+          categoryId: cat.id, categoryName: cat.name, categoryGroup: cat.group, parentCategoryId: cat.parentId,
+          attributeOptions: [], attributes: {}, structureFieldOptions: [], structureFacts: {},
           image: null, status: 'empty' as const,
         },
       }
@@ -381,9 +448,10 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
       position: modelPosition(DEFAULT_INPUT_NODES.length),
       collapsed: false,
       data: {
+        modelId: selectedStyle.modelId,
         styleId: selectedStyle.id, styleName: selectedStyle.name,
         styleGroup: selectedStyle.group,
-        modelImage: modelReferenceUrl(selectedStyle.modelId), locked: true,
+        modelImage: modelReferenceUrl(selectedStyle.modelId), locked: true, source: 'builtin',
       },
     }
 
@@ -396,6 +464,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
         status: 'idle' as const, estimatedCount: 0, estimatedCost: 0, actualCost: 0,
       },
     }))
+    const careNode = careGraphNodes([], '', inputNodes.length, 0)[0]
 
     const edges: FlowEdge[] = []
     inputNodes.forEach(input => {
@@ -406,10 +475,16 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
     edges.push({
       id: nid('edge'),
       source: modelNode.id,
+      target: procNodes.find(proc => proc.data.processType === 'partial')!.id,
+      edgeType: 'model',
+    })
+    edges.push({
+      id: nid('edge'),
+      source: modelNode.id,
       target: procNodes.find(proc => proc.data.processType === 'model')!.id,
       edgeType: 'model',
     })
-    set({ nodes: organizeNodes([...inputNodes, modelNode, ...procNodes]), edges, canvasInitialized: true })
+    set({ nodes: organizeNodes([...inputNodes, modelNode, careNode, ...procNodes]), edges, canvasInitialized: true })
   },
 
   resetCanvas: () => {
@@ -432,8 +507,10 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
       realGenerationConfirm: null, exportResult: null,
       queuePaused: false, taskStages: {}, workflowEvents: [], workflowEventLastId: 0,
       inputGenerationTypes: {}, generationTypes: ['flat', 'partial', 'detail', 'model'],
+      availableModels: [], projectReferences: [], careCards: [], careSourceAssets: [], careDialogOpen: false, careEditingCardId: null,
       draftProjectMeta: { sku: '', name: '节点工作台项目', platform: 'local', style: 'v2 final', budget: 100 },
       projectSettingsOpen: true,
+      providerSettingsOpen: false,
       layoutDirty: false,
       layoutPrompt: null,
     })
@@ -454,16 +531,24 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
   restoreProject: async projectId => {
     set({ workflowBusy: true, workflowMessage: '正在恢复上次项目...' })
     try {
-      const [{ project }, { assets }, { tasks }] = await Promise.all([
+      const [{ project }, { assets }, { items }, { tasks }, modelResult, referenceResult, careResult] = await Promise.all([
         api.getProject(projectId),
         api.listAssets(projectId),
+        api.listItems(projectId),
         api.listTasks(projectId),
+        api.listProjectModels(projectId),
+        api.listProjectReferences(projectId),
+        api.listCareCards(projectId),
       ])
       const graph = buildRestoredProjectGraph({
         projectId,
         assets,
+        items,
         tasks,
-        selectedModelId: globalThis.localStorage?.getItem('longy-selected-model'),
+        selectedModelId: modelResult.selectedModelId ?? project.selectedModelId ?? globalThis.localStorage?.getItem('longy-selected-model'),
+        models: modelResult.models,
+        references: referenceResult.references,
+        careCards: careResult.careCards,
         createId: nid,
       })
       const taskProvider = tasks[0]?.provider
@@ -474,7 +559,11 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
         canvasInitialized: true,
         backendProjectId: projectId,
         projectMeta: project,
-        providerId: taskProvider === 'openrouter-icu' ? 'openrouter-icu' : 'mock',
+        providerId: taskProvider ?? 'mock',
+        availableModels: modelResult.models,
+        projectReferences: referenceResult.references,
+        careCards: careResult.careCards,
+        careSourceAssets: assets.filter(asset => !asset.itemId || !asset.categoryId),
         generationTypes: extractGenerationConfig(project.layout)?.generationTypes ?? ['flat', 'partial', 'detail', 'model'],
         inputGenerationTypes: extractGenerationConfig(project.layout)?.inputGenerationTypes ?? {},
         queuePaused: false,
@@ -503,18 +592,19 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
 
   setProviderId: providerId => {
     if (providerId === get().providerId) return
-    set(state => ({
+    const providerName = get().providers.find(item => item.id === providerId)?.name ?? providerId
+    const hasProviderFailure = get().nodes.some(node => node.type === 'output' && [
+      'QUOTA_EXCEEDED', 'AUTHENTICATION_FAILED', 'API_KEY_MISSING',
+    ].includes((node as FlowOutputNode).data.errorCode ?? ''))
+    set(() => ({
       providerId,
-      nodes: state.nodes
-        .filter(node => node.type !== 'output')
-        .map(node => {
-          if (node.type !== 'processing') return node
-          const proc = node as FlowProcessingNode
-          return { ...node, data: { ...proc.data, status: 'idle', estimatedCount: 0, estimatedCost: 0, actualCost: 0 } }
-        }),
-      edges: state.edges.filter(edge => edge.edgeType !== 'output'),
       realGenerationConfirm: null,
-      workflowMessage: providerId === 'mock' ? '已切换 Mock Provider，不消耗真实 API' : '已切换 OpenRouter ICU，生成前会再次确认',
+      shotPlan: null,
+      workflowMessage: providerId === 'mock'
+        ? '已切换 Mock Provider，不消耗真实 API'
+        : hasProviderFailure
+          ? `已选择 ${providerName}；请在监控台点击“迁移并恢复”处理失败与排队任务`
+          : `已切换 ${providerName}，生成前会再次确认`,
     }))
   },
 
@@ -700,6 +790,35 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
     }
   },
 
+  recoverProviderQueue: async () => {
+    const projectId = get().backendProjectId
+    if (!projectId || get().workflowBusy) return
+    const providerName = get().providers.find(item => item.id === get().providerId)?.name ?? get().providerId
+    set({ workflowBusy: true, workflowMessage: `正在迁移到 ${providerName}...` })
+    try {
+      const result = await api.recoverProviderQueue(projectId, get().providerId)
+      if (!result.taskIds.length) {
+        set({ workflowMessage: result.skipped.length
+          ? `没有可迁移任务；${result.skipped.length} 个任务因能力或限额不兼容被保留`
+          : '没有可迁移的系统性失败或排队任务' })
+        return
+      }
+      const { tasks } = await api.listTasks(projectId)
+      applyTasks(tasks)
+      const runId = get().versionCounter + 1
+      set({
+        versionCounter: runId,
+        queuePaused: false,
+        workflowMessage: `已迁移到 ${providerName}：重试 ${result.retried} 个失败任务，迁移 ${result.migratedQueued} 个排队任务${result.skipped.length ? `，保留 ${result.skipped.length} 个不兼容任务` : ''}`,
+      })
+      await pollTasks(runId)
+    } catch (error) {
+      set({ workflowMessage: error instanceof Error ? error.message : 'Provider 迁移恢复失败' })
+    } finally {
+      set({ workflowBusy: false })
+    }
+  },
+
   cancelQueuedOrRunning: async nodeIds => {
     const projectId = get().backendProjectId
     const outputs = get().nodes
@@ -770,8 +889,8 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
       position: inputPosition(get().nodes.filter(node => node.type === 'input').length),
       collapsed: false,
       data: {
-        categoryId: cat.id, categoryName: cat.name, categoryGroup: cat.group,
-        attributeOptions: [], attributes: {},
+        categoryId: cat.id, categoryName: cat.name, categoryGroup: cat.group, parentCategoryId: cat.parentId,
+        attributeOptions: [], attributes: {}, structureFieldOptions: [], structureFacts: {},
         image: null, status: 'empty',
       },
     }
@@ -795,22 +914,50 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
     void get().loadInputAttributes(newNode.id)
   },
 
-  removeNode: nodeId => {
+  removeNode: async nodeId => {
+    if (get().workflowBusy) return
     const removed = get().nodes.find(node => node.id === nodeId)
-    if (removed?.type === 'input') revokeThumbnail((removed as FlowInputNode).data.image?.thumbnailUrl)
-    set(state => ({
-      nodes: state.nodes.filter(node => node.id !== nodeId),
-      edges: state.edges.filter(edge => edge.source !== nodeId && edge.target !== nodeId),
-      changeTypeTargetNodeId: get().changeTypeTargetNodeId === nodeId ? null : get().changeTypeTargetNodeId,
-      layoutDirty: true,
-    }))
+    if (removed?.type !== 'input') return
+    const input = removed as FlowInputNode
+    const remote = input.data.image?.remote
+    if (remote) {
+      set({ workflowBusy: true, workflowMessage: `正在删除 ${input.data.categoryName}...` })
+      try {
+        await api.deleteItem(remote.projectId, remote.itemId)
+      } catch (error) {
+        set({ workflowMessage: error instanceof Error ? error.message : '单品删除失败' })
+        return
+      } finally {
+        set({ workflowBusy: false })
+      }
+    }
+    revokeThumbnail(input.data.image?.thumbnailUrl)
+    set(state => {
+      const removedIds = new Set(
+        state.nodes
+          .filter(node => node.id === nodeId || (
+            remote && node.type === 'output' && (node as FlowOutputNode).data.itemId === remote.itemId
+          ))
+          .map(node => node.id),
+      )
+      const inputGenerationTypes = { ...state.inputGenerationTypes }
+      if (remote) delete inputGenerationTypes[remote.itemId]
+      return {
+        nodes: state.nodes.filter(node => !removedIds.has(node.id)),
+        edges: state.edges.filter(edge => !removedIds.has(edge.source) && !removedIds.has(edge.target)),
+        inputGenerationTypes,
+        selectedNodeId: removedIds.has(state.selectedNodeId ?? '') ? null : state.selectedNodeId,
+        changeTypeTargetNodeId: state.changeTypeTargetNodeId === nodeId ? null : state.changeTypeTargetNodeId,
+        workflowMessage: remote ? `${input.data.categoryName}及关联任务已删除` : `${input.data.categoryName}节点已删除`,
+        layoutDirty: true,
+      }
+    })
   },
 
   uploadImage: (nodeId, image, file) => {
     const previous = get().nodes
       .find(node => node.id === nodeId)
     const previousImage = previous?.type === 'input' ? (previous as FlowInputNode).data.image : null
-    revokeThumbnail(previousImage?.thumbnailUrl)
     set(state => ({
       workflowBusy: true,
       workflowMessage: `正在导入 ${image.fileName}...`,
@@ -826,17 +973,31 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
           .find(node => node.id === nodeId) as FlowInputNode | undefined
         const categoryId = category?.data.categoryId || 'top'
         const attributes = category?.data.attributes ?? {}
-        const item = await api.createItem(projectId, {
-          name: file.name.replace(/\.[^.]+$/, ''),
-          categoryId,
-          attributes,
-          colorMaterial: '以原图为准',
-          sellingPoints: '结构、比例、颜色和细节严格保留',
-          isSellable: true,
-        })
-        const asset = await api.importAsset(projectId, file)
-        await api.confirmAsset(projectId, asset.id, item.id, categoryId, 'front')
-        const stableNodeId = `asset-${asset.id}`
+        let itemId = previousImage?.remote?.itemId
+        let assetId = previousImage?.remote?.assetId
+        if (itemId && assetId) {
+          await api.replaceAsset(projectId, assetId, file)
+        } else {
+          const item = await api.createItem(projectId, {
+            name: file.name.replace(/\.[^.]+$/, ''),
+            categoryId,
+            attributes,
+            structureFacts: category?.data.structureFacts ?? {},
+            colorMaterial: '以原图为准',
+            sellingPoints: '结构、比例、颜色和细节严格保留',
+            isSellable: true,
+          })
+          itemId = item.id
+          try {
+            const asset = await api.importAsset(projectId, file)
+            assetId = asset.id
+            await api.confirmAsset(projectId, assetId, itemId, categoryId, 'front')
+          } catch (error) {
+            await api.deleteItem(projectId, itemId).catch(() => undefined)
+            throw error
+          }
+        }
+        const stableNodeId = previousImage?.remote ? nodeId : `asset-${assetId}`
         set(state => ({
           nodes: state.nodes.map(node => node.type === 'input' && node.id === nodeId
             ? {
@@ -844,7 +1005,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
                 id: stableNodeId,
                 data: {
                   ...(node as FlowInputNode).data,
-                  image: { ...(node as FlowInputNode).data.image!, remote: { projectId, itemId: item.id, assetId: asset.id } },
+                  image: { ...(node as FlowInputNode).data.image!, remote: { projectId, itemId: itemId!, assetId: assetId! } },
                   status: 'confirmed',
                 },
               }
@@ -853,23 +1014,24 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
           selectedNodeId: stableNodeId,
           inputGenerationTypes: {
             ...state.inputGenerationTypes,
-            [item.id]: state.inputGenerationTypes[item.id] ?? [...state.generationTypes],
+            [itemId!]: state.inputGenerationTypes[itemId!] ?? [...state.generationTypes],
           },
-          workflowMessage: `素材已入库：${file.name}`,
+          workflowMessage: previousImage?.remote ? `素材已原位替换：${file.name}` : `素材已入库：${file.name}`,
           layoutDirty: true,
         }))
+        revokeThumbnail(previousImage?.thumbnailUrl)
       } catch (error) {
         const message = error instanceof Error ? error.message : '素材导入失败'
+        revokeThumbnail(image.thumbnailUrl)
         set(state => ({
           nodes: state.nodes.map(node => node.type === 'input' && node.id === nodeId
             ? {
                 ...node,
                 data: {
                   ...(node as FlowInputNode).data,
-                  status: 'error',
-                  image: (node as FlowInputNode).data.image
-                    ? { ...(node as FlowInputNode).data.image!, error: message }
-                    : null,
+                  status: previousImage?.remote ? 'confirmed' : 'error',
+                  image: previousImage?.remote ? previousImage : (node as FlowInputNode).data.image
+                    ? { ...(node as FlowInputNode).data.image!, error: message } : null,
                 },
               }
             : node),
@@ -884,6 +1046,13 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
   changeNodeType: (nodeId, categoryId) => {
     const cat = findCategory(categoryId)
     if (!cat) return
+    const previous = get().nodes.find(node => node.type === 'input' && node.id === nodeId) as FlowInputNode | undefined
+    if (!previous) return
+    if (previous.data.categoryId === categoryId) {
+      set({ typePickerOpen: false, changeTypeTargetNodeId: null })
+      return
+    }
+    const remote = previous.data.image?.remote
     set(state => ({
       nodes: state.nodes.map(node => {
         if (node.type !== 'input' || node.id !== nodeId) return node
@@ -892,16 +1061,52 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
           ...node,
           data: {
             ...input.data,
-            categoryId: cat.id, categoryName: cat.name, categoryGroup: cat.group,
-            attributeOptions: [], attributes: {},
-            image: input.data.image ? { ...input.data.image, remote: undefined } : input.data.image,
+            categoryId: cat.id, categoryName: cat.name, categoryGroup: cat.group, parentCategoryId: cat.parentId,
+            attributeOptions: [], attributes: {}, structureFieldOptions: [], structureFacts: {},
+            image: input.data.image,
           },
         }
       }),
       typePickerOpen: false,
       changeTypeTargetNodeId: null,
+      layoutDirty: true,
     }))
-    void get().loadInputAttributes(nodeId)
+    void (async () => {
+      if (remote) {
+        set({ workflowBusy: true, workflowMessage: `正在更新品类为 ${cat.name}...` })
+        try {
+          await api.updateItem(remote.projectId, remote.itemId, {
+            categoryId: cat.id, attributes: {}, structureFacts: {},
+          })
+          set(state => {
+            const staleOutputIds = new Set(
+              state.nodes
+                .filter(node => node.type === 'output' && (node as FlowOutputNode).data.itemId === remote.itemId)
+                .map(node => node.id),
+            )
+            return {
+              nodes: state.nodes.filter(node => !staleOutputIds.has(node.id)),
+              edges: state.edges.filter(edge => !staleOutputIds.has(edge.source) && !staleOutputIds.has(edge.target)),
+              selectedNodeId: staleOutputIds.has(state.selectedNodeId ?? '') ? nodeId : state.selectedNodeId,
+              shotPlan: null,
+              realGenerationConfirm: null,
+              workflowMessage: `品类已更新为 ${cat.name}，旧品类镜头方案已清除`,
+            }
+          })
+        } catch (error) {
+          set(state => ({
+            nodes: state.nodes.map(node => node.type === 'input' && node.id === nodeId
+              ? { ...node, data: previous.data }
+              : node),
+            workflowMessage: error instanceof Error ? error.message : '品类更新失败',
+          }))
+          return
+        } finally {
+          set({ workflowBusy: false })
+        }
+      }
+      await get().loadInputAttributes(nodeId)
+    })()
   },
 
   loadInputAttributes: async nodeId => {
@@ -909,12 +1114,26 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
     if (node?.type !== 'input') return
     const categoryId = (node as FlowInputNode).data.categoryId
     try {
-      const { template } = await api.getShotTemplate(categoryId)
+      const [{ template }, { fields }] = await Promise.all([
+        api.getShotTemplate(categoryId),
+        api.listStructureFields(),
+      ])
       const current = get().nodes.find(item => item.id === nodeId)
       if (current?.type !== 'input' || (current as FlowInputNode).data.categoryId !== categoryId) return
+      const currentInput = current as FlowInputNode
       const attributes = Object.fromEntries(
-        template.attributes.map(attribute => [attribute.key, attribute.default]),
+        template.attributes.map(attribute => [
+          attribute.key,
+          Object.hasOwn(currentInput.data.attributes, attribute.key)
+            ? currentInput.data.attributes[attribute.key]
+            : attribute.default,
+        ]),
       )
+      const structureFieldOptions = fields.filter(field => {
+        if (!field.parentIds?.length && !field.categoryIds?.length) return true
+        return field.parentIds?.includes(currentInput.data.parentCategoryId)
+          || field.categoryIds?.includes(currentInput.data.categoryId)
+      })
       set(state => ({
         nodes: state.nodes.map(item => item.type === 'input' && item.id === nodeId
           ? {
@@ -923,6 +1142,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
                 ...(item as FlowInputNode).data,
                 attributeOptions: template.attributes,
                 attributes,
+                structureFieldOptions,
               },
             }
           : item),
@@ -947,6 +1167,54 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
       : node),
   })),
 
+  setInputStructureFact: (nodeId, fieldKey, value) => set(state => ({
+    nodes: state.nodes.map(node => node.type === 'input' && node.id === nodeId
+      ? {
+          ...node,
+          data: {
+            ...(node as FlowInputNode).data,
+            structureFacts: {
+              ...(node as FlowInputNode).data.structureFacts,
+              [fieldKey]: value,
+            },
+          },
+        }
+      : node),
+  })),
+
+  saveInputFacts: async nodeId => {
+    const input = get().nodes.find(node => node.type === 'input' && node.id === nodeId) as FlowInputNode | undefined
+    const remote = input?.data.image?.remote
+    if (!input || !remote) {
+      set({ workflowMessage: '商品结构事实会在上传素材时一并保存' })
+      return
+    }
+    set({ workflowBusy: true, workflowMessage: '正在保存商品事实...' })
+    try {
+      const item = await api.updateItem(remote.projectId, remote.itemId, {
+        attributes: input.data.attributes,
+        structureFacts: input.data.structureFacts,
+      })
+      set(state => ({
+        nodes: state.nodes.map(node => node.type === 'input' && node.id === nodeId
+          ? {
+              ...node,
+              data: {
+                ...(node as FlowInputNode).data,
+                attributes: item.attributes,
+                structureFacts: item.structureFacts,
+              },
+            }
+          : node),
+        workflowMessage: `${input.data.categoryName}的商品事实已保存；后续任务会使用新提示词与缓存键`,
+      }))
+    } catch (error) {
+      set({ workflowMessage: error instanceof Error ? error.message : '商品事实保存失败' })
+    } finally {
+      set({ workflowBusy: false })
+    }
+  },
+
   setChangeTypeTargetNodeId: nodeId => set({
     changeTypeTargetNodeId: nodeId,
     typePickerOpen: nodeId !== null,
@@ -954,12 +1222,23 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
 
   setModelStyle: styleId => {
     const style = MODEL_STYLES.find(item => item.id === styleId)
-    if (!style) return
-    globalThis.localStorage?.setItem('longy-selected-model', style.id)
+    const remote = get().availableModels.find(item => item.id === styleId)
+    if (!style && !remote) return
+    const selection = style
+      ? { ...style, source: 'builtin' as const }
+      : {
+          id: remote!.id,
+          name: remote!.name,
+          group: '自定义模特',
+          modelId: remote!.id,
+          referenceUrl: remote!.referenceUrl,
+          source: 'custom' as const,
+        }
+    globalThis.localStorage?.setItem('longy-selected-model', selection.modelId ?? selection.id)
     set(state => ({
       nodes: applyModelSelection(
         state.nodes.filter(node => node.type !== 'output'),
-        style,
+        selection,
       ).map(node => {
         if (node.type !== 'processing') return node
         const proc = node as FlowProcessingNode
@@ -968,8 +1247,211 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
       edges: state.edges.filter(edge => edge.edgeType !== 'output'),
       modelPickerOpen: false,
       layoutDirty: true,
-      workflowMessage: `已选择 ${style.name}，请重新生成任务方案`,
+      workflowMessage: `已选择 ${selection.name}，请重新生成任务方案`,
     }))
+    const projectId = get().backendProjectId
+    if (projectId && selection.modelId) {
+      void api.selectProjectModel(projectId, selection.modelId).catch(error => {
+        set({ workflowMessage: error instanceof Error ? error.message : '模特选择保存失败' })
+      })
+    }
+  },
+
+  uploadCustomModel: async (file, authorization) => {
+    if (get().workflowBusy) return
+    set({ workflowBusy: true, workflowMessage: `正在上传自定义模特 ${file.name}...` })
+    try {
+      const projectId = await ensureProject()
+      const name = file.name.replace(/\.[^.]+$/, '') || '自定义模特'
+      const { model } = await api.importCustomModel(projectId, file, name, authorization)
+      const modelResult = await api.listProjectModels(projectId)
+      set({ availableModels: modelResult.models })
+      globalThis.localStorage?.setItem('longy-selected-model', model.id)
+      set(state => ({
+        nodes: applyModelSelection(
+          state.nodes.filter(node => node.type !== 'output'),
+          {
+            id: model.id,
+            name: model.name,
+            group: '自定义模特',
+            modelId: model.id,
+            referenceUrl: model.referenceUrl,
+            source: 'custom',
+          },
+        ),
+        edges: state.edges.filter(edge => edge.edgeType !== 'output'),
+        modelPickerOpen: false,
+        layoutDirty: true,
+        workflowMessage: `自定义模特已入库并选中：${model.name}`,
+      }))
+    } catch (error) {
+      set({ workflowMessage: error instanceof Error ? error.message : '自定义模特上传失败' })
+    } finally {
+      set({ workflowBusy: false })
+    }
+  },
+
+  uploadModelReference: async (modelId, file, angle) => {
+    if (get().workflowBusy) return
+    set({ workflowBusy: true, workflowMessage: `正在补充模特身份角度 ${file.name}...` })
+    try {
+      const projectId = await ensureProject()
+      await api.importModelReference(projectId, modelId, file, angle)
+      const modelResult = await api.listProjectModels(projectId)
+      set({
+        availableModels: modelResult.models,
+        workflowMessage: '模特多角度身份包已更新；后续模特图会自动使用这些身份参考',
+      })
+    } catch (error) {
+      set({ workflowMessage: error instanceof Error ? error.message : '模特身份角度上传失败' })
+    } finally {
+      set({ workflowBusy: false })
+    }
+  },
+
+  uploadProjectReference: async (file, role) => {
+    if (get().workflowBusy) return
+    set({ workflowBusy: true, workflowMessage: `正在上传${role === 'pose' ? '姿势' : role === 'detail' ? '细节' : '风格'}参考图...` })
+    try {
+      const projectId = await ensureProject()
+      const { reference } = await api.importProjectReference(
+        projectId,
+        file,
+        role,
+        file.name.replace(/\.[^.]+$/, ''),
+      )
+      const inputCount = get().nodes.filter(node => node.type === 'input').length
+      const referenceIndex = get().nodes.filter(node => node.type === 'pose' || node.type === 'reference').length
+      const base = {
+        id: `reference-${reference.id}`,
+        position: referencePosition(inputCount, referenceIndex),
+        collapsed: false,
+      }
+      const data = {
+        referenceId: reference.id,
+        name: reference.name,
+        image: `/api/projects/${projectId}/references/${reference.id}/file`,
+      }
+      const node: FlowPoseNode | FlowReferenceNode = role === 'pose'
+        ? { ...base, type: 'pose', data: { ...data, role: 'pose' } }
+        : { ...base, type: 'reference', data: { ...data, role } }
+      const nextEdges: FlowEdge[] = []
+      if (node.type === 'pose') {
+        const model = get().nodes.find(item => item.type === 'model')
+        if (model) nextEdges.push({
+          id: nid('edge'), source: model.id, target: node.id, edgeType: 'pose',
+        })
+      } else {
+        const targetTypes: ProcessType[] = role === 'detail'
+          ? ['detail', 'partial']
+          : ['flat', 'detail', 'partial', 'model']
+        targetTypes.forEach(type => {
+          const process = get().nodes.find(item =>
+            item.type === 'processing' && (item as FlowProcessingNode).data.processType === type)
+          if (process) nextEdges.push({
+            id: nid('edge'), source: node.id, target: process.id, edgeType: 'reference',
+          })
+        })
+      }
+      set(state => ({
+        nodes: organizeNodes([...state.nodes.filter(item => item.type !== 'output'), node]),
+        edges: [...state.edges.filter(edge => edge.edgeType !== 'output'), ...nextEdges],
+        projectReferences: [...state.projectReferences, reference],
+        layoutDirty: true,
+        workflowMessage: `${reference.name} 已作为${role === 'pose' ? '姿势' : role === 'detail' ? '细节证据' : '风格'}参考节点加入画布`,
+      }))
+    } catch (error) {
+      set({ workflowMessage: error instanceof Error ? error.message : '参考图上传失败' })
+    } finally {
+      set({ workflowBusy: false })
+    }
+  },
+
+  removeProjectReference: async nodeId => {
+    const node = get().nodes.find(item => item.id === nodeId)
+    if (node?.type !== 'pose' && node?.type !== 'reference') return
+    const referenceId = (node as FlowPoseNode | FlowReferenceNode).data.referenceId
+    const projectId = get().backendProjectId
+    if (!projectId) return
+    try {
+      await api.deleteProjectReference(projectId, referenceId)
+      set(state => ({
+        nodes: state.nodes.filter(item => item.id !== nodeId && item.type !== 'output'),
+        edges: state.edges.filter(edge => edge.source !== nodeId && edge.target !== nodeId && edge.edgeType !== 'output'),
+        projectReferences: state.projectReferences.filter(item => item.id !== referenceId),
+        layoutDirty: true,
+        workflowMessage: '参考节点已删除；请重新生成任务方案',
+      }))
+    } catch (error) {
+      set({ workflowMessage: error instanceof Error ? error.message : '参考节点删除失败' })
+    }
+  },
+
+  openCareEditor: cardId => set({
+    careDialogOpen: true,
+    careEditingCardId: cardId ?? null,
+  }),
+
+  closeCareEditor: () => set({ careDialogOpen: false, careEditingCardId: null }),
+
+  saveCareCard: async (payload, cardId) => {
+    if (get().workflowBusy) return
+    set({ workflowBusy: true, workflowMessage: cardId ? '正在更新洗护说明图...' : '正在生成洗护说明图...' })
+    try {
+      const projectId = await ensureProject()
+      if (cardId) await api.updateCareCard(projectId, cardId, payload)
+      else await api.createCareCard(projectId, payload)
+      const { careCards } = await api.listCareCards(projectId)
+      const inputCount = get().nodes.filter(node => node.type === 'input').length
+      const referenceCount = get().nodes.filter(node => node.type === 'pose' || node.type === 'reference').length
+      const careNodes = careGraphNodes(careCards, projectId, inputCount, referenceCount)
+      const careInput = careNodes[0]
+      const careOutputs = careNodes.slice(1)
+      const careEdges: FlowEdge[] = careOutputs.map(output => ({
+        id: `edge-care-${(output as FlowCareOutputNode).data.cardId}`,
+        source: careInput.id,
+        target: output.id,
+        edgeType: 'care',
+      }))
+      set(state => ({
+        nodes: organizeNodes([
+          ...state.nodes.filter(node => node.type !== 'careInput' && node.type !== 'careOutput'),
+          ...careNodes,
+        ]),
+        edges: [
+          ...state.edges.filter(edge => edge.edgeType !== 'care'),
+          ...careEdges,
+        ],
+        careCards,
+        careDialogOpen: false,
+        careEditingCardId: null,
+        workflowMessage: cardId ? '洗护说明图已更新' : '洗护说明图已生成并加入独立输出节点',
+      }))
+    } catch (error) {
+      set({ workflowMessage: error instanceof Error ? error.message : '洗护说明图生成失败' })
+      throw error
+    } finally {
+      set({ workflowBusy: false })
+    }
+  },
+
+  uploadCareSource: async file => {
+    if (get().workflowBusy) return null
+    set({ workflowBusy: true, workflowMessage: `正在上传水洗标素材 ${file.name}...` })
+    try {
+      const projectId = await ensureProject()
+      const asset = await api.importAsset(projectId, file)
+      set(state => ({
+        careSourceAssets: [...state.careSourceAssets.filter(item => item.id !== asset.id), asset],
+        workflowMessage: '水洗标素材已上传，可开始自动识别',
+      }))
+      return asset
+    } catch (error) {
+      set({ workflowMessage: error instanceof Error ? error.message : '水洗标素材上传失败' })
+      return null
+    } finally {
+      set({ workflowBusy: false })
+    }
   },
 
   generatePlan: async () => {
@@ -987,9 +1469,8 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
       const projectId = await ensureProject()
       const selectedModel = get().nodes
         .find(node => node.type === 'model') as FlowModelNode | undefined
-      const modelId = selectedModel
-        ? MODEL_STYLES.find(style => style.id === selectedModel.data.styleId)?.modelId
-        : undefined
+      const modelId = selectedModel?.data.modelId
+        ?? (selectedModel ? MODEL_STYLES.find(style => style.id === selectedModel.data.styleId)?.modelId : undefined)
       const plan = await api.previewShotPlan(projectId, modelId ? [modelId] : [], get().providerId)
       set({
         shotPlan: plan,
@@ -1027,14 +1508,15 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
             assetId: shot.assetId,
             reason: shot.reason,
             promptHints: shot.promptHints,
+            promptMode: shot.promptMode,
+            customPrompt: shot.customPrompt,
           })),
       )
       await api.saveShotSelections(projectId, selections)
       const selectedModel = get().nodes
         .find(node => node.type === 'model') as FlowModelNode | undefined
-      const modelId = selectedModel
-        ? MODEL_STYLES.find(style => style.id === selectedModel.data.styleId)?.modelId
-        : undefined
+      const modelId = selectedModel?.data.modelId
+        ?? (selectedModel ? MODEL_STYLES.find(style => style.id === selectedModel.data.styleId)?.modelId : undefined)
       await api.planTasks(projectId, modelId ? [modelId] : [], get().providerId, selectedIds)
       const { tasks } = await api.listTasks(projectId)
       const outputsByType = new Map<ProcessType, number>()
@@ -1058,7 +1540,8 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
             parentOutputId: null, rejectReason: null, customPrompt: null, revisionNote: null,
             referenceMode: 'original', baseVersionId: null,
             cost: 0, durationMs: null, tier: task.tier,
-            qcScore: null, qcPassed: null, versions: task.versions,
+            qcScore: null, qcPassed: null,
+            errorCode: null, errorMessage: null, versions: task.versions,
           },
         }
       })
@@ -1094,7 +1577,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
         ],
         shotPlan: null,
         layoutDirty: true,
-        workflowMessage: `任务方案已确认：${tasks.length} 个 ${get().providerId === 'mock' ? 'Mock' : 'OpenRouter'} 任务`,
+        workflowMessage: `任务方案已确认：${tasks.length} 个 ${get().providers.find(item => item.id === get().providerId)?.name ?? get().providerId} 任务`,
       }))
       useWorkbench.getState().setMode('generate')
     } catch (error) {
@@ -1192,6 +1675,8 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
         required: shot.priority === 'P0',
         isCustom: true,
         promptHints: shot.promptHints,
+        promptMode: 'default' as const,
+        customPrompt: '',
         status: 'selected' as const,
         source: 'ai' as const,
         assetId: null,
@@ -1410,6 +1895,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
                 customPrompt: revision?.prompt?.trim() || null,
                 revisionNote: revision?.note?.trim() || null,
                 thumbnail: null, cost: 0, durationMs: null,
+                errorCode: null, errorMessage: null,
               },
             }
           : node),
@@ -1447,6 +1933,8 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
                 durationMs: null,
                 qcScore: null,
                 qcPassed: null,
+                errorCode: null,
+                errorMessage: null,
               },
             }
           : node),
@@ -1464,6 +1952,10 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
     const output = get().nodes.find(node => node.id === nodeId) as FlowOutputNode | undefined
     const projectId = get().backendProjectId
     if (!output || !projectId) return
+    if (output.data.qcPassed !== true) {
+      set({ workflowMessage: '一致性质检未通过或尚未完成，请先修正并重新生成' })
+      return
+    }
     set({ workflowBusy: true, workflowMessage: '正在锁定版本...' })
     try {
       await api.reviewTask(projectId, output.data.taskId, 'lock')
@@ -1486,7 +1978,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
     const outputs = get().nodes
       .filter(node => node.type === 'output' && nodeIds.includes(node.id))
       .map(node => node as FlowOutputNode)
-      .filter(node => node.data.status === 'satisfied')
+      .filter(node => node.data.status === 'satisfied' && node.data.qcPassed === true)
     if (!projectId || !outputs.length) return
     set({ workflowBusy: true, workflowMessage: `正在批量锁定 ${outputs.length} 张图片...` })
     try {
@@ -1580,6 +2072,7 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
           failed: result.failed,
           files: result.mapping,
           targetDir: result.targetDir,
+          manifestPath: result.manifestPath,
         },
         workflowMessage: `导出完成：${result.exported} 张成功，${result.failed.length} 张失败`,
       })
@@ -1635,4 +2128,5 @@ export const useNodeStore = create<NodeStoreState>((set, get) => ({
   setSelected: id => set({ selectedNodeId: id }),
   setTypePickerOpen: open => set({ typePickerOpen: open }),
   setModelPickerOpen: open => set({ modelPickerOpen: open }),
+  setProviderSettingsOpen: open => set({ providerSettingsOpen: open }),
 }))

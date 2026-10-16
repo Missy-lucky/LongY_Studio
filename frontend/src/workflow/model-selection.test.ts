@@ -47,8 +47,25 @@ describe('applyModelSelection', () => {
     expect(untouchedProcessing).toEqual(processingNode)
     expect(updatedModel.data.styleId).toBe('korean-sweetcool')
     expect(updatedModel.data.styleName).toBe('M2 韩系甜酷')
+    expect(updatedModel.data.modelId).toBe('korean-sweetcool')
+    expect(updatedModel.data.source).toBe('builtin')
     expect(updatedModel.data.modelImage).toBe('/api/library/models/korean-sweetcool/reference?variant=preview')
     expect(updatedModel.data.locked).toBe(true)
+  })
+
+  it('支持项目私有自定义模特地址', () => {
+    const result = applyModelSelection([modelNode], {
+      id: 'custom-1',
+      name: '用户模特',
+      group: '自定义模特',
+      modelId: 'custom-1',
+      referenceUrl: '/api/projects/p1/models/custom-1/reference',
+      source: 'custom',
+    })
+
+    expect(result[0].data.modelId).toBe('custom-1')
+    expect(result[0].data.modelImage).toBe('/api/projects/p1/models/custom-1/reference')
+    expect(result[0].data.source).toBe('custom')
   })
 
   it('缺少 modelId 时清空预览地址，避免残留上一个模特', () => {

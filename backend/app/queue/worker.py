@@ -1,4 +1,5 @@
 """本地任务队列：固定并发、事件留痕、幂等调用与可恢复失败。"""
+import json
 from pathlib import Path
 
 import threading
@@ -12,9 +13,104 @@ from ..providers import resolve_provider
 from ..providers.base import Cancellable, GenerateRequest
 from ..services.library_loader import load_shot_templates
 from ..services.consistency_qc import run_consistency_qc, save_qc_report
+from ..services.outfit_fallbacks import resolve_outfit_fallbacks
 
 FLAT_REFERENCE = "asset-library/reference-templates/plan-view.png"
 MODEL_STYLE_REFERENCE = "asset-library/reference-templates/model-display.jpg"
+AUTO_PAUSE_ERROR_CODES = {"QUOTA_EXCEEDED", "AUTHENTICATION_FAILED", "API_KEY_MISSING"}
+
+
+def _provider_failure_detail(error) -> tuple[str, str]:
+    code = getattr(error, "code", "TIMEOUT")
+    message = getattr(error, "message", "生成超时")
+    suggestion = getattr(error, "suggestion", "").strip()
+    if suggestion:
+        message = f"{message}；建议：{suggestion}"
+    return code, message
+
+
+def _garment_reference_paths(db, task, reserved_reference_slots: int = 2) -> tuple[list[str], list[str]]:
+    """Return target refs and bounded generation refs, with real fallback layers."""
+    target = [r["file_path"] for r in db.execute(
+        "SELECT file_path FROM assets WHERE item_id=? ORDER BY created_at,id",
+        (task["item_id"],),
+    ).fetchall()][:12]
+    if task["type"] not in {"partial", "model"}:
+        return target, target
+    category_ids = {
+        row["category_id"]
+        for row in db.execute(
+            "SELECT category_id FROM items WHERE project_id=? ORDER BY created_at,id",
+            (task["project_id"],),
+        ).fetchall()
+    }
+    fallbacks = resolve_outfit_fallbacks(category_ids)
+    fallback_paths = [fallback.path for fallback in fallbacks]
+    provider_id = task["provider"] if "provider" in task.keys() else ""
+    declared_limit = getattr(resolve_provider(provider_id), "capabilities", {}).get("maxReferenceImages", 16)
+    provider_limit = declared_limit if isinstance(declared_limit, int) else 16
+    garment_reference_limit = min(10, max(1, provider_limit - reserved_reference_slots))
+    actual_reference_limit = garment_reference_limit - len(fallback_paths)
+    if task["type"] == "partial":
+        return target, [*target[:actual_reference_limit], *fallback_paths]
+    rows = db.execute(
+        """SELECT i.id item_id,a.file_path
+           FROM assets a JOIN items i ON i.id=a.item_id
+           WHERE i.project_id=?
+           ORDER BY CASE WHEN i.id=? THEN 0 ELSE 1 END,
+                    i.created_at,i.id,a.created_at,a.id""",
+        (task["project_id"], task["item_id"]),
+    ).fetchall()
+    outfit: list[str] = []
+    per_item: dict[str, int] = {}
+    # Keep the garment budget at ten so identity/style/project references still fit.
+    for row in rows:
+        if len(outfit) >= actual_reference_limit:
+            break
+        count = per_item.get(row["item_id"], 0)
+        if count >= 2:
+            continue
+        outfit.append(row["file_path"])
+        per_item[row["item_id"]] = count + 1
+    return target, [*outfit, *fallback_paths]
+
+
+def _project_reference_paths(db, project_id: str, task_type: str) -> list[str]:
+    applicable_roles = {
+        "flat": {"style"},
+        "detail": {"style", "detail"},
+        "partial": {"pose", "style", "detail"},
+        "model": {"pose", "style"},
+    }[task_type]
+    return [
+        row["file_path"]
+        for row in db.execute(
+            """SELECT role,file_path FROM project_references
+               WHERE project_id=? ORDER BY
+                 CASE role WHEN 'pose' THEN 0 WHEN 'detail' THEN 1 ELSE 2 END,
+                 created_at,id""",
+            (project_id,),
+        ).fetchall()
+        if row["role"] in applicable_roles
+    ]
+
+
+def _model_reference_paths(db, model_id: str | None, fallback: str | None) -> list[str]:
+    if not model_id:
+        return [fallback] if fallback else []
+    rows = db.execute(
+        """SELECT file_path FROM model_references WHERE model_id=?
+           ORDER BY is_primary DESC,
+             CASE angle WHEN 'front' THEN 0 WHEN 'three-quarter-left' THEN 1
+                        WHEN 'three-quarter-right' THEN 2 WHEN 'profile-left' THEN 3
+                        WHEN 'profile-right' THEN 4 WHEN 'back' THEN 5 ELSE 6 END,
+             created_at,id LIMIT 6""",
+        (model_id,),
+    ).fetchall()
+    paths = [row["file_path"] for row in rows]
+    if fallback and fallback not in paths:
+        paths.insert(0, fallback)
+    return paths
 
 
 class QueueWorker:
@@ -37,9 +133,11 @@ class QueueWorker:
             )
             self._thread.start()
 
-    def pause(self) -> None:
+    def pause(self) -> bool:
         with self._lock:
+            changed = not self._paused
             self._paused = True
+        return changed
 
     def resume(self) -> None:
         with self._lock:
@@ -108,7 +206,7 @@ class QueueWorker:
         version_id: str | None = None
         try:
             task = db.execute(
-                """SELECT t.*,i.category_id,m.reference_path model_reference_path
+                """SELECT t.*,i.category_id,i.structure_json,m.reference_path model_reference_path
                    FROM tasks t
                    LEFT JOIN items i ON i.id=t.item_id
                    LEFT JOIN models m ON m.id=t.model_id
@@ -117,10 +215,11 @@ class QueueWorker:
             ).fetchone()
             if not task or task["status"] not in ("queued", "generating"):
                 return
-            garment_references = [r["file_path"] for r in db.execute(
-                "SELECT file_path FROM assets WHERE item_id=? ORDER BY created_at",
-                (task["item_id"],),
-            ).fetchall()]
+            model_references = _model_reference_paths(db, task["model_id"], task["model_reference_path"])
+            target_garment_references, garment_references = _garment_reference_paths(
+                db, task, reserved_reference_slots=max(2, min(7, len(model_references) + 1)),
+            )
+            project_references = _project_reference_paths(db, task["project_id"], task["type"])
             template = load_shot_templates().get(task["category_id"]) if task["category_id"] else None
             shot = None
             if template and task["shot_id"]:
@@ -139,19 +238,27 @@ class QueueWorker:
                 roles = {
                     "flat": ["garment"],
                     "detail": ["garment"],
-                    "partial": ["garment"],
+                    "partial": ["garment", "model-identity"],
                     "model": ["garment", "model-identity", "style"],
                 }[task["type"]]
             references: list[str] = []
             for role in roles:
                 if role == "garment":
                     references.extend(garment_references)
-                elif role == "model-identity" and task["model_reference_path"]:
-                    references.append(task["model_reference_path"])
+                elif role == "model-identity":
+                    references.extend(path for path in model_references if path not in references)
                 elif role == "style":
                     references.append(MODEL_STYLE_REFERENCE)
+            if task["type"] in ("partial", "model"):
+                references.extend(path for path in model_references if path not in references)
+            for reference in project_references:
+                if reference not in references:
+                    references.append(reference)
+            declared_limit = getattr(resolve_provider(task["provider"]), "capabilities", {}).get("maxReferenceImages", 16)
+            provider_limit = declared_limit if isinstance(declared_limit, int) else 16
+            references = references[:provider_limit]
 
-            model_reference_path = task["model_reference_path"]
+            model_reference_path = model_references[0] if model_references else None
             mask_path: str | None = None
             version_id = task["current_version_id"]
             current_version = None
@@ -207,7 +314,21 @@ class QueueWorker:
         if not version_id:
             return
 
-        task = get_db().execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+        task_db = get_db()
+        try:
+            # Refresh mutable task state after creating the version, while retaining
+            # item-owned structure facts required by post-generation QC.
+            task = task_db.execute(
+                """SELECT t.*,i.structure_json
+                   FROM tasks t
+                   LEFT JOIN items i ON i.id=t.item_id
+                   WHERE t.id=?""",
+                (task_id,),
+            ).fetchone()
+        finally:
+            task_db.close()
+        if not task:
+            return
         provider = resolve_provider(task["provider"])
 
         def resolve_runtime_path(value: str | None) -> Path | None:
@@ -222,7 +343,9 @@ class QueueWorker:
                 candidate = settings.data_dir / candidate
             return candidate if candidate.is_file() else None
 
-        garment_reference = resolve_runtime_path(references[0] if references else None)
+        garment_reference = resolve_runtime_path(
+            target_garment_references[0] if target_garment_references else None
+        )
         model_reference = resolve_runtime_path(model_reference_path)
         output = template["defaults"]["outputByType"][task["type"]] if template else None
         request = GenerateRequest(
@@ -257,10 +380,15 @@ class QueueWorker:
             else:
                 self._cancellations[task_id] = cancellable
         deadline = time.monotonic() + 300
+        timed_out = False
         while not done.wait(0.2):
             with self._lock:
                 cancelled_now = task_id in self._cancelled_ids
-            if cancelled_now or time.monotonic() >= deadline:
+            if cancelled_now:
+                break
+            if time.monotonic() >= deadline:
+                timed_out = True
+                cancellable.cancel()
                 break
         with self._lock:
             self._cancellations.pop(task_id, None)
@@ -282,6 +410,7 @@ class QueueWorker:
                         model_reference=model_reference,
                         enforce=task["provider"] != "mock",
                         deep_model_qc=task["provider"] != "mock",
+                        structure_facts=json.loads(task["structure_json"] or "{}"),
                     )
                     qc_report["tier"] = task["tier"]
                     qc_report["pipeline"] = ["base-generation", "hd-detail-repair"] if task["tier"] == "hd" else ["base-generation"]
@@ -330,9 +459,12 @@ class QueueWorker:
                 if cancelled:
                     message = "用户取消生成"
                     code = "USER_CANCELLED"
+                elif timed_out:
+                    message = "生成请求超过 300 秒，已终止 Provider 调用"
+                    code = "PROVIDER_TIMEOUT"
                 else:
-                    message = getattr(err, "message", "生成超时")
-                    code = getattr(err, "code", "TIMEOUT")
+                    code, message = _provider_failure_detail(err)
+                auto_paused = code in AUTO_PAUSE_ERROR_CODES and self.pause()
                 db.execute(
                     "UPDATE task_versions SET status='failed',error_code=?,error_message=? WHERE id=?",
                     (code, message, version_id),
@@ -344,6 +476,15 @@ class QueueWorker:
                     db.execute(
                         "UPDATE provider_calls SET status='failed',error_code=? WHERE id=?",
                         (code, call["id"]),
+                    )
+                if auto_paused:
+                    db.execute(
+                        """INSERT INTO events(time,project_id,type,message)
+                           VALUES(?,?,?,?)""",
+                        (
+                            utc_now(), task["project_id"], "queue.auto_pause",
+                            f"检测到 {code}，队列已自动暂停；请切换或重新配置 Provider 后再恢复",
+                        ),
                     )
                 db.commit()
                 self._event(task["project_id"], task_id, "task.fail", f"任务 {task['code']} 失败：{message}")

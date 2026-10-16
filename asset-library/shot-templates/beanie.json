@@ -1,0 +1,289 @@
+{
+  "schema": "longy.shot-template.v1",
+  "id": "beanie-shot-v1",
+  "category": "beanie",
+  "categoryName": "冷帽",
+  "group": "配饰",
+  "version": "1.1.0",
+  "updatedAt": "2026-10-16",
+  "description": "冷帽二级品类标准电商套图镜头清单。",
+  "attributes": [
+    {
+      "key": "hasTurnup",
+      "label": "翻边",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "key": "hasPom",
+      "label": "毛球",
+      "type": "boolean",
+      "default": false
+    }
+  ],
+  "defaults": {
+    "tier": "draft",
+    "outputByType": {
+      "flat": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "partial": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      },
+      "detail": {
+        "width": 1536,
+        "height": 1536,
+        "background": "white"
+      },
+      "model": {
+        "width": 1152,
+        "height": 1536,
+        "background": "white"
+      }
+    },
+    "referenceRoles": {
+      "garment": "商品原始图，结构与颜色的唯一权威来源",
+      "model-identity": "v2 定稿模特身份参考，锁定脸型与身形",
+      "style": "商业展示风格参考，只借构图与光线，不借人和衣服"
+    }
+  },
+  "shots": {
+    "flat": [
+      {
+        "id": "flat-front",
+        "name": "正面商品图",
+        "type": "flat",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "帽型正面完整展示，纯白背景",
+        "references": [
+          "garment"
+        ],
+        "platformUse": "主图第1张"
+      },
+      {
+        "id": "flat-side",
+        "name": "侧面商品图",
+        "type": "flat",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "侧面帽型与帽檐弧度",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "flat-top",
+        "name": "顶视商品图",
+        "type": "flat",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "顶部俯视，展示帽顶结构",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "partial": [
+      {
+        "id": "partial-worn-1",
+        "name": "冷帽模特穿搭·头部正面佩戴特写",
+        "type": "partial",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "模特真实穿着或佩戴冷帽，紧裁到商品区域，重点呈现头部正面佩戴；保留必要的人体连接与自然姿态，商品完整清晰，不从全身成图裁切放大",
+        "references": [
+          "garment",
+          "model-identity"
+        ]
+      },
+      {
+        "id": "partial-worn-2",
+        "name": "冷帽模特穿搭·头部侧面佩戴特写",
+        "type": "partial",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "模特真实穿着或佩戴冷帽，紧裁到商品区域，重点呈现头部侧面佩戴；保留必要的人体连接与自然姿态，商品完整清晰，不从全身成图裁切放大",
+        "references": [
+          "garment",
+          "model-identity"
+        ]
+      }
+    ],
+    "detail": [
+      {
+        "id": "detail-brim",
+        "name": "帽檐特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "帽檐宽度与弧度",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-fabric",
+        "name": "材质特写",
+        "type": "detail",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "微距展示面料织法",
+        "references": [
+          "garment"
+        ]
+      },
+      {
+        "id": "detail-logo",
+        "name": "标识特写",
+        "type": "detail",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "标识位置与工艺",
+        "references": [
+          "garment"
+        ]
+      }
+    ],
+    "model": [
+      {
+        "id": "model-head-front",
+        "name": "头部正面模特图",
+        "type": "model",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "模特头部正面，展示佩戴效果",
+        "references": [
+          "garment",
+          "model-identity"
+        ],
+        "platformUse": "主图第2张"
+      },
+      {
+        "id": "model-head-side",
+        "name": "头部侧面模特图",
+        "type": "model",
+        "required": true,
+        "priority": "P0",
+        "promptHints": "头部侧面，展示帽檐与脸型关系",
+        "references": [
+          "garment",
+          "model-identity"
+        ]
+      },
+      {
+        "id": "model-half-front",
+        "name": "半身正面模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P1",
+        "promptHints": "半身正面，展示整体搭配",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      },
+      {
+        "id": "model-full",
+        "name": "全身模特图",
+        "type": "model",
+        "required": false,
+        "priority": "P2",
+        "promptHints": "全身展示造型",
+        "references": [
+          "garment",
+          "model-identity",
+          "style"
+        ]
+      }
+    ]
+  },
+  "conditionalShots": [
+    {
+      "when": {
+        "attribute": "hasTurnup",
+        "equals": true
+      },
+      "add": [
+        {
+          "id": "detail-turnup",
+          "name": "翻边特写",
+          "type": "detail",
+          "required": false,
+          "priority": "P1",
+          "promptHints": "严格依据商品原图展示翻边结构与工艺，不添加不存在的细节",
+          "references": [
+            "garment"
+          ]
+        }
+      ]
+    },
+    {
+      "when": {
+        "attribute": "hasPom",
+        "equals": true
+      },
+      "add": [
+        {
+          "id": "detail-pom",
+          "name": "毛球特写",
+          "type": "detail",
+          "required": false,
+          "priority": "P1",
+          "promptHints": "严格依据商品原图展示毛球结构与工艺，不添加不存在的细节",
+          "references": [
+            "garment"
+          ]
+        }
+      ]
+    }
+  ],
+  "detailPageModules": [
+    {
+      "id": "module-scene",
+      "name": "场景搭配图",
+      "priority": "P1",
+      "generate": true,
+      "promptHints": "真实使用场景，展示佩戴或使用状态"
+    },
+    {
+      "id": "module-selling-points",
+      "name": "卖点图",
+      "priority": "P0",
+      "generate": true,
+      "promptHints": "围绕材质工艺卖点，预留文案排版空间"
+    },
+    {
+      "id": "module-spec-chart",
+      "name": "规格参数表",
+      "priority": "P0",
+      "generate": false,
+      "note": "尺寸重量材质参数，用设计模板输出，不走AI生图"
+    },
+    {
+      "id": "module-care",
+      "name": "保养说明",
+      "priority": "P2",
+      "generate": false,
+      "note": "固定设计模板"
+    }
+  ],
+  "platformPresets": {
+    "taobao": {
+      "mainImages": [
+        "flat-front",
+        "model-front-full",
+        "detail-brim",
+        "module-scene",
+        "module-selling-points"
+      ],
+      "minSize": "800x800",
+      "recommendedSize": "1200x1200"
+    }
+  }
+}

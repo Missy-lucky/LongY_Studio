@@ -1,0 +1,30 @@
+{
+  "id": "silkScarf",
+  "name": "丝巾",
+  "group": "配饰",
+  "parentId": "accessory",
+  "icon": "Wind",
+  "bodyZone": "颈部",
+  "layerOrder": 42,
+  "requiredViews": [
+    "正面",
+    "反面",
+    "侧面",
+    "细节",
+    "材质"
+  ],
+  "defaultDetailTasks": [
+    "印花",
+    "卷边",
+    "面料光泽",
+    "边角"
+  ],
+  "defaultPartialTasks": [
+    "颈部系法佩戴",
+    "肩颈垂坠佩戴"
+  ],
+  "modelPromptHints": "丝巾位于颈部或肩部，锁定尺寸比例、印花位置、卷边和丝质光泽",
+  "negativeHints": "不改成厚围巾，不改变印花、边角、卷边、颜色、尺寸或面料透明度",
+  "isSellableByDefault": true,
+  "builtin": true
+}

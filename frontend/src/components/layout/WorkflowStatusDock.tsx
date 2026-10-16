@@ -47,15 +47,19 @@ export function WorkflowStatusDock() {
   const message = useNodeStore(state => state.workflowMessage)
   const busy = useNodeStore(state => state.workflowBusy)
   const queuePaused = useNodeStore(state => state.queuePaused)
+  const providerId = useNodeStore(state => state.providerId)
+  const providers = useNodeStore(state => state.providers)
   const taskStages = useNodeStore(state => state.taskStages)
   const workflowEvents = useNodeStore(state => state.workflowEvents)
   const regenerate = useNodeStore(state => state.regenerate)
   const retryFailedOutputs = useNodeStore(state => state.retryFailedOutputs)
   const pauseTaskQueue = useNodeStore(state => state.pauseTaskQueue)
   const resumeTaskQueue = useNodeStore(state => state.resumeTaskQueue)
+  const recoverProviderQueue = useNodeStore(state => state.recoverProviderQueue)
   const cancelQueuedOrRunning = useNodeStore(state => state.cancelQueuedOrRunning)
   const openPromptRevision = useNodeStore(state => state.openPromptRevision)
   const setSelected = useNodeStore(state => state.setSelected)
+  const setProviderSettingsOpen = useNodeStore(state => state.setProviderSettingsOpen)
   const [expanded, setExpanded] = useState(false)
   const [height, setHeight] = useState(() => {
     const stored = Number(globalThis.localStorage?.getItem('lys-status-dock-height'))
@@ -71,6 +75,10 @@ export function WorkflowStatusDock() {
   const active = outputs.filter(node => ['queued', 'generating'].includes(node.data.status))
   const generating = outputs.filter(node => node.data.status === 'generating')
   const failed = outputs.filter(node => node.data.status === 'failed')
+  const providerBlocked = failed.some(node => [
+    'QUOTA_EXCEEDED', 'AUTHENTICATION_FAILED', 'API_KEY_MISSING',
+  ].includes(node.data.errorCode ?? ''))
+  const providerName = providers.find(provider => provider.id === providerId)?.name ?? providerId
   const done = outputs.filter(node => !['queued', 'generating'].includes(node.data.status))
   const cost = outputs.reduce((sum, node) => sum + node.data.cost, 0)
 
@@ -214,11 +222,25 @@ export function WorkflowStatusDock() {
               </button>
               <button
                 onClick={() => void retryFailedOutputs()}
-                disabled={busy || failed.length === 0}
+                disabled={busy || failed.length === 0 || providerBlocked}
                 className="btn btn-secondary !min-h-[24px] !px-2 !text-[10px]"
+                title={providerBlocked ? '先处理额度或鉴权问题，再恢复队列' : undefined}
               >
                 <RefreshCw size={10}/>重试失败
               </button>
+              {providerBlocked && (
+                <>
+                  <button onClick={() => setProviderSettingsOpen(true)}
+                    className="btn btn-secondary !min-h-[24px] !px-2 !text-[10px]">
+                    Provider 设置
+                  </button>
+                  <button onClick={() => void recoverProviderQueue()} disabled={busy}
+                    title={`将系统性失败和剩余排队任务迁移到 ${providerName}，保留历史版本`}
+                    className="btn btn-primary !min-h-[24px] !px-2 !text-[10px]">
+                    迁移并恢复 · {providerName}
+                  </button>
+                </>
+              )}
               <button
                 onClick={() => {
                   if (!active.length) return
@@ -272,6 +294,12 @@ export function WorkflowStatusDock() {
                           {node.data.status === 'generating' && stage && (
                             <div className="truncate text-[9px]" style={{ color: 'var(--text-3)' }}>{stage.message}</div>
                           )}
+                          {node.data.status === 'failed' && node.data.errorMessage && (
+                            <div className="max-w-[260px] truncate text-[9px]" style={{ color: 'var(--error)' }}
+                              title={`${node.data.errorCode ?? 'GENERATION_FAILED'} · ${node.data.errorMessage}`}>
+                              {node.data.errorCode ?? 'GENERATION_FAILED'} · {node.data.errorMessage}
+                            </div>
+                          )}
                         </td>
                         <td className="px-2 py-1.5">
                           <div className="flex items-center gap-1.5">
@@ -288,9 +316,13 @@ export function WorkflowStatusDock() {
                         <td className="px-3 py-1.5 text-right">
                           <div className="flex justify-end gap-1.5">
                             {node.data.status === 'failed' && (
-                              <button onClick={() => void regenerate(node.id)} className="text-[10px]" style={{ color: 'var(--primary)' }}>
-                                重试
-                              </button>
+                              ['QUOTA_EXCEEDED', 'AUTHENTICATION_FAILED', 'API_KEY_MISSING'].includes(node.data.errorCode ?? '')
+                                ? <button onClick={() => setProviderSettingsOpen(true)} className="text-[10px]" style={{ color: 'var(--primary)' }}>
+                                    配置
+                                  </button>
+                                : <button onClick={() => void regenerate(node.id)} className="text-[10px]" style={{ color: 'var(--primary)' }}>
+                                    重试
+                                  </button>
                             )}
                             {node.data.status === 'unsatisfied' && (
                               <button onClick={() => openPromptRevision(node.id)} className="text-[10px]" style={{ color: 'var(--primary)' }}>

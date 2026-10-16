@@ -68,6 +68,16 @@ export interface ProductItem {
   colorMaterial: string
   sellingPoints: string
   isSellable: boolean
+  structureFacts: Record<string, string>
+}
+
+export interface GarmentStructureField {
+  key: string
+  label: string
+  placeholder: string
+  maxLength: number
+  parentIds?: string[]
+  categoryIds?: string[]
 }
 
 export interface ModelProfile {

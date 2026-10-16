@@ -1,0 +1,30 @@
+{
+  "id": "baseballCap",
+  "name": "棒球帽",
+  "group": "配饰",
+  "parentId": "accessory",
+  "icon": "Crown",
+  "bodyZone": "头部",
+  "layerOrder": 40,
+  "requiredViews": [
+    "正面",
+    "反面",
+    "侧面",
+    "细节",
+    "材质"
+  ],
+  "defaultDetailTasks": [
+    "帽檐",
+    "帽顶拼片",
+    "后调节扣",
+    "标识"
+  ],
+  "defaultPartialTasks": [
+    "头部正面佩戴",
+    "头部侧面佩戴"
+  ],
+  "modelPromptHints": "棒球帽佩戴于头部，锁定帽檐弧度、帽冠高度、拼片和后调节结构",
+  "negativeHints": "不改成渔夫帽或冷帽，不改变帽檐、帽冠、调节扣、颜色或标识",
+  "isSellableByDefault": true,
+  "builtin": true
+}

@@ -33,9 +33,9 @@ const STATUS_TEXT: Record<string, { label: string; color: string }> = {
 
 const TASK_GROUPS = [
   { type: 'flat', label: '平面图' },
-  { type: 'partial', label: '局部图' },
+  { type: 'partial', label: '模特上身商品特写' },
   { type: 'detail', label: '细节图' },
-  { type: 'model', label: '模特图' },
+  { type: 'model', label: '模特上身搭配展示' },
 ] as const
 
 const PRIORITY_COLORS: Record<ShotPriority, string> = {

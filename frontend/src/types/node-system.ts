@@ -1,9 +1,9 @@
-import type { CategoryAttribute, ShotPriority } from '../../../shared/types/domain'
+import type { CategoryAttribute, GarmentStructureField, ShotPriority } from '../../../shared/types/domain'
 
 /** 节点系统类型定义 —— 与设计文档一致 */
 
 // ============ 节点基础 ============
-export type NodeType = 'input' | 'model' | 'processing' | 'output'
+export type NodeType = 'input' | 'model' | 'pose' | 'reference' | 'careInput' | 'careOutput' | 'processing' | 'output'
 
 export interface BaseNode {
   id: string
@@ -17,8 +17,11 @@ export interface InputNodeData {
   categoryId: string
   categoryName: string
   categoryGroup: string
+  parentCategoryId: string
   attributeOptions: CategoryAttribute[]
   attributes: Record<string, boolean>
+  structureFieldOptions: GarmentStructureField[]
+  structureFacts: Record<string, string>
   image: UploadedImage | null
   status: 'empty' | 'uploaded' | 'confirmed' | 'error'
 }
@@ -47,16 +50,61 @@ export interface FlowInputNode extends BaseNode {
 
 // ============ 模特节点 ============
 export interface ModelNodeData {
+  modelId?: string
   styleId: string
   styleName: string
   styleGroup: string
   modelImage: string
   locked: boolean
+  source?: 'builtin' | 'custom'
 }
 
 export interface FlowModelNode extends BaseNode {
   type: 'model'
   data: ModelNodeData
+}
+
+export type ProjectReferenceRole = 'pose' | 'style' | 'detail'
+
+export interface ReferenceNodeData {
+  referenceId: string
+  name: string
+  role: ProjectReferenceRole
+  image: string
+}
+
+export interface FlowPoseNode extends BaseNode {
+  type: 'pose'
+  data: ReferenceNodeData & { role: 'pose' }
+}
+
+export interface FlowReferenceNode extends BaseNode {
+  type: 'reference'
+  data: ReferenceNodeData & { role: 'style' | 'detail' }
+}
+
+// ============ 独立洗护说明链路 ============
+export interface CareInputNodeData {
+  cardCount: number
+  latestProductName: string
+}
+
+export interface FlowCareInputNode extends BaseNode {
+  type: 'careInput'
+  data: CareInputNodeData
+}
+
+export interface CareOutputNodeData {
+  cardId: string
+  productName: string
+  brand: string
+  compositionSummary: string
+  thumbnail: string
+}
+
+export interface FlowCareOutputNode extends BaseNode {
+  type: 'careOutput'
+  data: CareOutputNodeData
 }
 
 // ============ 处理节点 ============
@@ -100,6 +148,8 @@ export interface OutputVersionRecord {
   referenceMode?: 'original' | 'generated'
   baseVersionId?: string | null
   maskPath?: string | null
+  errorCode?: string | null
+  errorMessage?: string | null
 }
 
 export interface OutputNodeData {
@@ -128,6 +178,8 @@ export interface OutputNodeData {
   tier: 'draft' | 'hd'
   qcScore: number | null
   qcPassed: boolean | null
+  errorCode: string | null
+  errorMessage: string | null
   versions: OutputVersionRecord[]
 }
 
@@ -136,10 +188,10 @@ export interface FlowOutputNode extends BaseNode {
   data: OutputNodeData
 }
 
-export type AnyFlowNode = FlowInputNode | FlowModelNode | FlowProcessingNode | FlowOutputNode
+export type AnyFlowNode = FlowInputNode | FlowModelNode | FlowPoseNode | FlowReferenceNode | FlowCareInputNode | FlowCareOutputNode | FlowProcessingNode | FlowOutputNode
 
 // ============ 连线 ============
-export type EdgeType = 'material' | 'model' | 'output' | 'review' | 'regen'
+export type EdgeType = 'material' | 'model' | 'pose' | 'reference' | 'care' | 'output' | 'review' | 'regen'
 
 export interface FlowEdgeData {
   edgeType: EdgeType
@@ -161,6 +213,7 @@ export interface CategoryType {
   id: string
   name: string
   group: CategoryGroup
+  parentId: string
   icon: string
   defaultDetailTasks: string[]
   defaultPartialTasks: string[]
@@ -191,6 +244,9 @@ export const STATUS_COLORS: Record<OutputStatus, string> = {
 export const EDGE_COLORS: Record<EdgeType, string> = {
   material: '#3B82F6',
   model: '#8B5CF6',
+  pose: '#EC4899',
+  reference: '#14B8A6',
+  care: '#D97706',
   output: '#6366F1',
   review: '#22C55E',
   regen: '#F59E0B',

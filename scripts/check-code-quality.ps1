@@ -10,6 +10,11 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & $python -m pytest (Join-Path $root "tests")
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+node --check (Join-Path $root "desktop\electron\main.cjs")
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+node --check (Join-Path $root "desktop\electron\preload.cjs")
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 Push-Location (Join-Path $root "frontend")
 npm run test:unit
 if ($LASTEXITCODE -ne 0) {

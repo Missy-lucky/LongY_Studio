@@ -22,5 +22,6 @@
   "modelPromptHints": "手表出现在手腕，完整展示商品比例与搭配关系",
   "negativeHints": "不改变商品结构、颜色、纹理和标识，不添加不存在的细节",
   "isSellableByDefault": true,
-  "builtin": true
+  "builtin": true,
+  "parentId": "accessory"
 }

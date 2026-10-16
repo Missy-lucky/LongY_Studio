@@ -1,18 +1,21 @@
 """任务接口：规则规划、幂等提交、审核、重生成与版本恢复。"""
 import base64
 import binascii
+import hashlib
 import json
 import re
 import uuid
 from pathlib import Path
+from typing import Literal
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 from ..config import settings
 from ..database import get_db, utc_now
-from ..providers import resolve_provider
-from ..queue.worker import worker
+from ..providers import list_providers, resolve_provider
+from ..queue.worker import AUTO_PAUSE_ERROR_CODES, worker
 from ..services.library_loader import load_shot_templates
+from ..services.provider_config import provider_setting
 from ..services.shot_planning import build_shot_plan_preview
 from ..services.task_planner import _expand_template_shots, plan_tasks
 from ..utils.case import camelize
@@ -52,12 +55,29 @@ class PlanIn(BaseModel):
     shot_ids: list[str] | None = Field(default=None, alias="shotIds")
 
 
+def _validate_model_ids(db, project_id: str, model_ids: list[str] | None) -> None:
+    if not model_ids:
+        return
+    requested = set(model_ids)
+    allowed = {
+        row["id"] for row in db.execute(
+            """SELECT id FROM models
+               WHERE enabled=1 AND (project_id IS NULL OR project_id=?)""",
+            (project_id,),
+        ).fetchall()
+    }
+    invalid = requested - allowed
+    if invalid:
+        raise HTTPException(400, f"模特不存在或不属于当前项目：{', '.join(sorted(invalid))}")
+
+
 @router.post("/plan/preview")
 def plan_preview(project_id: str, body: PlanIn) -> dict:
     db = get_db()
     try:
         if not db.execute("SELECT 1 FROM projects WHERE id=?", (project_id,)).fetchone():
             raise HTTPException(404, "项目不存在")
+        _validate_model_ids(db, project_id, body.model_ids)
     finally:
         db.close()
     return build_shot_plan_preview(
@@ -71,6 +91,7 @@ def plan(project_id: str, body: PlanIn) -> dict:
     try:
         if not db.execute("SELECT 1 FROM projects WHERE id=?", (project_id,)).fetchone():
             raise HTTPException(404, "项目不存在")
+        _validate_model_ids(db, project_id, body.model_ids)
     finally:
         db.close()
     return plan_tasks(
@@ -94,6 +115,8 @@ class ShotSelectionIn(BaseModel):
     asset_id: str | None = Field(default=None, alias="assetId")
     reason: str = ""
     prompt_hints: str = Field(default="", alias="promptHints")
+    prompt_mode: Literal["default", "custom"] = Field(default="default", alias="promptMode")
+    custom_prompt: str = Field(default="", max_length=6000, alias="customPrompt")
 
 
 class ShotSelectionBatchIn(BaseModel):
@@ -167,14 +190,16 @@ def save_shot_selections(project_id: str, body: ShotSelectionBatchIn) -> dict:
                 db.execute(
                     """INSERT INTO project_shot_selections(
                            project_id,item_id,shot_id,shot_name,type,priority,required,is_custom,
-                           status,source,asset_id,reason,prompt_hints,created_at,updated_at
-                       ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                           status,source,asset_id,reason,prompt_hints,prompt_mode,custom_prompt,
+                           created_at,updated_at
+                       ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                        ON CONFLICT(project_id,item_id,shot_id) DO UPDATE SET
                            shot_name=excluded.shot_name,type=excluded.type,
                            priority=excluded.priority,required=excluded.required,
                            is_custom=excluded.is_custom,status=excluded.status,
                            source=excluded.source,asset_id=excluded.asset_id,
                            reason=excluded.reason,prompt_hints=excluded.prompt_hints,
+                           prompt_mode=excluded.prompt_mode,custom_prompt=excluded.custom_prompt,
                            updated_at=excluded.updated_at""",
                     (
                         project_id, selection.item_id, selection.shot_id,
@@ -184,6 +209,8 @@ def save_shot_selections(project_id: str, body: ShotSelectionBatchIn) -> dict:
                         int(not template_shot and selection.is_custom),
                         selection.status, source, asset_id, selection.reason,
                         template_shot["promptHints"] if template_shot else selection.prompt_hints,
+                        selection.prompt_mode,
+                        selection.custom_prompt.strip(),
                         now, now,
                     ),
                 )
@@ -202,6 +229,45 @@ def submit(project_id: str, body: SubmitIn) -> dict:
     db = get_db()
     queued = 0
     try:
+        candidates = []
+        for tid in body.task_ids:
+            row = db.execute(
+                "SELECT id,status,provider,tier,estimated_cost FROM tasks WHERE id=? AND project_id=?",
+                (tid, project_id),
+            ).fetchone()
+            if not row:
+                raise HTTPException(404, f"任务不存在：{tid}")
+            if row["status"] in ("planned", "cached", "failed"):
+                candidates.append(row)
+        by_provider: dict[str, list] = {}
+        for row in candidates:
+            by_provider.setdefault(row["provider"], []).append(row)
+        for provider_id, provider_rows in by_provider.items():
+            if provider_id == "mock":
+                continue
+            max_images = int(float(provider_setting(provider_id, "maxBatchImages", "4") or 4))
+            if len(provider_rows) > max_images:
+                raise HTTPException(
+                    409,
+                    f"{provider_id} 本批 {len(provider_rows)} 张超过安全上限 {max_images} 张；请拆批或在 Provider 设置中调整",
+                )
+            max_cost = float(provider_setting(provider_id, "maxEstimatedCostPerBatch", "0") or 0)
+            estimate = sum(float(row["estimated_cost"] or 0) for row in provider_rows)
+            if max_cost > 0 and estimate > max_cost:
+                raise HTTPException(409, f"{provider_id} 本批预估 {estimate:.2f} 超过费用上限 {max_cost:.2f}")
+        project = db.execute("SELECT budget FROM projects WHERE id=?", (project_id,)).fetchone()
+        if not project:
+            raise HTTPException(404, "项目不存在")
+        spent = float(db.execute(
+            "SELECT COALESCE(SUM(amount),0) amount FROM cost_events WHERE project_id=? AND provider<>'mock'",
+            (project_id,),
+        ).fetchone()["amount"])
+        batch_estimate = sum(
+            float(row["estimated_cost"] or 0) for row in candidates if row["provider"] != "mock"
+        )
+        if project["budget"] > 0 and spent + batch_estimate > project["budget"]:
+            remaining = max(0.0, float(project["budget"]) - spent)
+            raise HTTPException(409, f"本批预估 {batch_estimate:.2f} 超过项目剩余预算 {remaining:.2f}")
         for tid in body.task_ids:
             row = db.execute("SELECT status FROM tasks WHERE id=? AND project_id=?", (tid, project_id)).fetchone()
             if not row:
@@ -226,6 +292,111 @@ def submit(project_id: str, body: SubmitIn) -> dict:
 
 class QueueCancelIn(BaseModel):
     task_ids: list[str] = Field(alias="taskIds")
+
+
+class QueueProviderRecoveryIn(BaseModel):
+    provider: str = Field(min_length=1)
+
+
+def _recover_provider_tasks(db, project_id: str, provider_id: str) -> dict:
+    """Move only queued and systemic-provider failures to an explicitly chosen provider."""
+    provider = resolve_provider(provider_id)
+    rows = db.execute(
+        """SELECT t.*,v.status current_version_status,v.error_code current_error_code,
+                  v.mask_path current_mask_path
+           FROM tasks t
+           LEFT JOIN task_versions v ON v.id=t.current_version_id
+           WHERE t.project_id=? AND t.status IN ('queued','failed')
+           ORDER BY t.queue_index,t.code""",
+        (project_id,),
+    ).fetchall()
+    task_ids: list[str] = []
+    skipped: list[dict[str, str]] = []
+    retried = 0
+    migrated_queued = 0
+    now = utc_now()
+    max_images = 100 if provider.id == "mock" else int(float(provider_setting(provider.id, "maxBatchImages", "4") or 4))
+    max_cost = 0 if provider.id == "mock" else float(provider_setting(provider.id, "maxEstimatedCostPerBatch", "0") or 0)
+    accumulated_estimate = 0.0
+    for row in rows:
+        is_systemic_failure = (
+            row["status"] == "failed"
+            and row["current_error_code"] in AUTO_PAUSE_ERROR_CODES
+        )
+        if row["status"] == "failed" and not is_systemic_failure:
+            continue
+        if row["current_mask_path"] and provider.capabilities.get("maskEdit") is False:
+            skipped.append({"taskId": row["id"], "reason": "目标 Provider 不支持蒙版重绘"})
+            continue
+        if len(task_ids) >= max_images:
+            skipped.append({"taskId": row["id"], "reason": f"目标 Provider 单批上限为 {max_images} 张"})
+            continue
+        next_estimate = provider.estimate(row["tier"], 1)
+        if max_cost > 0 and accumulated_estimate + next_estimate > max_cost:
+            skipped.append({"taskId": row["id"], "reason": f"迁移后将超过单批费用上限 {max_cost:.2f}"})
+            continue
+
+        current_version_id = row["current_version_id"]
+        if is_systemic_failure:
+            next_version = db.execute(
+                "SELECT COALESCE(MAX(version),0)+1 v FROM task_versions WHERE task_id=?",
+                (row["id"],),
+            ).fetchone()["v"]
+            current_version_id = uuid.uuid4().hex[:12]
+            db.execute(
+                """INSERT INTO task_versions(
+                       id,task_id,version,tier,status,provider,prompt,negative_prompt,
+                       reference_mode,created_at)
+                   VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    current_version_id, row["id"], next_version, row["tier"],
+                    "generating", provider.id, row["prompt"], row["negative_prompt"],
+                    "original", now,
+                ),
+            )
+            retried += 1
+        else:
+            migrated_queued += 1
+            if current_version_id and row["current_version_status"] == "generating":
+                db.execute(
+                    "UPDATE task_versions SET provider=? WHERE id=?",
+                    (provider.id, current_version_id),
+                )
+
+        cache_seed = row["cache_key"] or row["id"]
+        cache_key = hashlib.sha256(
+            f"{cache_seed}\nprovider-recovery:{provider.id}".encode("utf-8")
+        ).hexdigest()
+        db.execute(
+            """UPDATE tasks
+               SET status='queued',provider=?,estimated_cost=?,cache_hit=0,cache_key=?,
+                   current_version_id=?,idempotency_key=?,updated_at=?
+               WHERE id=?""",
+            (
+                provider.id, provider.estimate(row["tier"], 1), cache_key,
+                current_version_id, uuid.uuid4().hex, now, row["id"],
+            ),
+        )
+        task_ids.append(row["id"])
+        accumulated_estimate += next_estimate
+
+    if task_ids:
+        db.execute(
+            """INSERT INTO events(time,project_id,type,message,payload)
+               VALUES(?,?,?,?,?)""",
+            (
+                now, project_id, "queue.provider_recover",
+                f"已切换到 {provider.name}：重试 {retried} 个系统性失败任务，迁移 {migrated_queued} 个排队任务",
+                json.dumps({"provider": provider.id, "taskIds": task_ids, "skipped": skipped}, ensure_ascii=False),
+            ),
+        )
+    return {
+        "provider": provider.id,
+        "retried": retried,
+        "migratedQueued": migrated_queued,
+        "taskIds": task_ids,
+        "skipped": skipped,
+    }
 
 
 @router.post("/queue/pause")
@@ -256,6 +427,24 @@ def resume_queue(project_id: str) -> dict:
     finally:
         db.close()
     return {"paused": False}
+
+
+@router.post("/queue/recover-provider")
+def recover_provider_queue(project_id: str, body: QueueProviderRecoveryIn) -> dict:
+    provider_ids = {item["id"] for item in list_providers()}
+    if body.provider not in provider_ids:
+        raise HTTPException(400, f"未知 Provider：{body.provider}")
+    db = get_db()
+    try:
+        if not db.execute("SELECT 1 FROM projects WHERE id=?", (project_id,)).fetchone():
+            raise HTTPException(404, "项目不存在")
+        with db:
+            result = _recover_provider_tasks(db, project_id, body.provider)
+    finally:
+        db.close()
+    if result["taskIds"]:
+        worker.resume()
+    return {**result, "paused": worker.paused}
 
 
 @router.post("/queue/cancel")
@@ -309,15 +498,29 @@ def review(project_id: str, task_id: str, body: ReviewIn) -> dict:
     version_status = {"accept": "accepted", "reject": "rejected", "lock": "locked", "unlock": "accepted"}
     db = get_db()
     try:
-        row = db.execute("SELECT current_version_id FROM tasks WHERE id=? AND project_id=?", (task_id, project_id)).fetchone()
+        row = db.execute(
+            """SELECT t.current_version_id,t.status,v.qc_passed,i.structure_json
+               FROM tasks t
+               LEFT JOIN task_versions v ON v.id=t.current_version_id
+               LEFT JOIN items i ON i.id=t.item_id
+               WHERE t.id=? AND t.project_id=?""",
+            (task_id, project_id),
+        ).fetchone()
         if not row:
             raise HTTPException(404, "任务不存在")
+        if body.action == "lock" and row["qc_passed"] != 1:
+            raise HTTPException(409, "一致性 QC 未通过或尚未完成，请先修正并重新生成后再锁定")
+        if body.action == "lock" and row["status"] not in ("accepted", "locked"):
+            raise HTTPException(409, "请先点击满意，人工确认商品结构事实后再锁定")
         db.execute("UPDATE tasks SET status=?,updated_at=? WHERE id=?", (status_map[body.action], utc_now(), task_id))
         if row["current_version_id"]:
             db.execute("UPDATE task_versions SET status=?,reason=?,note=? WHERE id=?",
                        (version_status[body.action], body.reason, body.note, row["current_version_id"]))
+        structure_suffix = "；已人工确认商品结构事实" if (
+            body.action == "accept" and row["structure_json"] not in (None, "", "{}")
+        ) else ""
         db.execute("INSERT INTO events(time,project_id,task_id,type,message) VALUES(?,?,?,?,?)",
-                   (utc_now(), project_id, task_id, f"review.{body.action}", f"任务审核：{body.action}（{body.reason or '无原因'}）"))
+                   (utc_now(), project_id, task_id, f"review.{body.action}", f"任务审核：{body.action}（{body.reason or '无原因'}）{structure_suffix}"))
         db.commit()
         return {"ok": True}
     finally:
@@ -454,8 +657,13 @@ def start_hd_repair(project_id: str, task_id: str) -> dict:
 
         provider = resolve_provider_for_estimate(row["provider"])
         estimate = 0 if row["provider"] == "mock" else provider.estimate("hd", 1)
-        if row["budget"] > 0 and estimate > row["budget"]:
-            raise HTTPException(409, f"高清修复预估 {estimate:.2f} 超过项目剩余预算 {row['budget']:.2f}")
+        spent = float(db.execute(
+            "SELECT COALESCE(SUM(amount),0) amount FROM cost_events WHERE project_id=? AND provider<>'mock'",
+            (project_id,),
+        ).fetchone()["amount"])
+        remaining = max(0.0, float(row["budget"]) - spent) if row["budget"] > 0 else 0.0
+        if row["budget"] > 0 and estimate > remaining:
+            raise HTTPException(409, f"高清修复预估 {estimate:.2f} 超过项目剩余预算 {remaining:.2f}")
 
         next_v = db.execute(
             "SELECT COALESCE(MAX(version),0)+1 v FROM task_versions WHERE task_id=?", (task_id,)

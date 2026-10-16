@@ -9,6 +9,8 @@ from ..config import PROJECT_ROOT
 from ..database import get_db
 from ..services.prompt_builder import legacy_prompts
 from ..services.library_loader import load_shot_templates
+from ..services.garment_structure import structure_field_specs
+from ..services.outfit_fallbacks import default_garment_records
 from ..utils.case import camelize
 
 router = APIRouter()
@@ -27,6 +29,8 @@ def categories() -> dict:
             d["defaultPartialTasks"] = json.loads(d.pop("default_partial_tasks"))
             d["modelPromptHints"] = d.pop("model_prompt_hints")
             d["negativeHints"] = d.pop("negative_hints")
+            d["group"] = d.pop("group_name")
+            d["parentId"] = d.pop("parent_category_id")
             d["isSellableDefault"] = bool(d.pop("is_sellable_default"))
             d["builtin"] = bool(d.pop("builtin"))
             out.append(d)
@@ -106,3 +110,39 @@ def shot_template(category_id: str) -> dict:
     if not template:
         raise HTTPException(404, "品类套图模板不存在")
     return {"template": template}
+
+
+@router.get("/structure-fields")
+def structure_fields() -> dict:
+    return {"fields": structure_field_specs()}
+
+
+@router.get("/default-garments")
+def default_garments() -> dict:
+    return {
+        "items": [
+            {
+                "id": item["id"],
+                "role": item["role"],
+                "name": item["name"],
+                "color": item["color"],
+                "previewUrl": f"/api/library/default-garments/{item['id']}/file",
+            }
+            for item in default_garment_records()
+        ]
+    }
+
+
+@router.get("/default-garments/{garment_id}/file")
+def default_garment_file(garment_id: str) -> FileResponse:
+    item = next(
+        (record for record in default_garment_records() if record["id"] == garment_id),
+        None,
+    )
+    if not item:
+        raise HTTPException(404, "默认补位素材不存在")
+    root = (PROJECT_ROOT / "asset-library" / "default-garments").resolve()
+    path = (PROJECT_ROOT / item["path"]).resolve()
+    if not path.is_relative_to(root) or not path.is_file():
+        raise HTTPException(404, "默认补位素材文件不存在")
+    return FileResponse(path)

@@ -1,0 +1,30 @@
+{
+  "id": "suitPants",
+  "name": "西裤",
+  "group": "下装",
+  "parentId": "lower",
+  "icon": "Shirt",
+  "bodyZone": "下肢",
+  "layerOrder": 20,
+  "requiredViews": [
+    "正面",
+    "反面",
+    "侧面",
+    "细节",
+    "材质"
+  ],
+  "defaultDetailTasks": [
+    "腰头门襟",
+    "前褶",
+    "侧袋",
+    "裤脚"
+  ],
+  "defaultPartialTasks": [
+    "腰胯正面穿着",
+    "裤线全腿穿着"
+  ],
+  "modelPromptHints": "西裤覆盖腰部至裤脚，锁定腰头门襟、裤线、前褶、臀腿松量和裤长",
+  "negativeHints": "不改成牛仔裤或运动裤，不改变裤线、前褶、腰头、裤长、颜色或面料",
+  "isSellableByDefault": true,
+  "builtin": true
+}

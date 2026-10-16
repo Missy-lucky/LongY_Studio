@@ -1,0 +1,30 @@
+{
+  "id": "tie",
+  "name": "领带",
+  "group": "配饰",
+  "parentId": "accessory",
+  "icon": "Sparkles",
+  "bodyZone": "颈部与胸前",
+  "layerOrder": 42,
+  "requiredViews": [
+    "正面",
+    "反面",
+    "侧面",
+    "细节",
+    "材质"
+  ],
+  "defaultDetailTasks": [
+    "领带结",
+    "面料纹理",
+    "尖端",
+    "图案"
+  ],
+  "defaultPartialTasks": [
+    "颈部正面佩戴",
+    "胸前垂坠佩戴"
+  ],
+  "modelPromptHints": "领带位于衬衫领口和胸前，锁定宽度、长度、领带结、尖端和图案位置",
+  "negativeHints": "不改成丝巾或领结，不添加不存在的领带夹、图案、标识或配件",
+  "isSellableByDefault": true,
+  "builtin": true
+}

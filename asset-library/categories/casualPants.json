@@ -1,0 +1,30 @@
+{
+  "id": "casualPants",
+  "name": "休闲裤",
+  "group": "下装",
+  "parentId": "lower",
+  "icon": "Shirt",
+  "bodyZone": "下肢",
+  "layerOrder": 20,
+  "requiredViews": [
+    "正面",
+    "反面",
+    "侧面",
+    "细节",
+    "材质"
+  ],
+  "defaultDetailTasks": [
+    "腰头",
+    "抽绳或门襟",
+    "口袋",
+    "裤脚"
+  ],
+  "defaultPartialTasks": [
+    "腰部正面穿着",
+    "腿部版型穿着"
+  ],
+  "modelPromptHints": "休闲裤覆盖腰部至裤脚，锁定腰头、裆部、裤型松量、口袋和裤长",
+  "negativeHints": "不改成牛仔裤或西裤，不改变腰头、裤型、裤长、口袋、颜色或面料",
+  "isSellableByDefault": true,
+  "builtin": true
+}

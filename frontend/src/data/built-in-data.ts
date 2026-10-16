@@ -35,7 +35,15 @@ export function buildDemoMaterials(sku: string) {
   const items = [] as any[]
   defs.forEach((d, di) => {
     const itemId = `${sku}-item-${di + 1}`
-    items.push({ id: itemId, name: d.item, categoryId: d.cat, colorMaterial: d.color, sellingPoints: d.points, isSellable: true })
+    items.push({
+      id: itemId,
+      name: d.item,
+      categoryId: d.cat,
+      colorMaterial: d.color,
+      sellingPoints: d.points,
+      isSellable: true,
+      structureFacts: {},
+    })
     d.views.forEach((v, vi) => {
       const id = `${itemId}-m${vi + 1}`
       materials.push({

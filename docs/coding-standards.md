@@ -155,7 +155,7 @@ chore: vendor OpenRouter CLI
 - 自动更新
 - 远程崩溃收集
 - 云端账户
-- 多真实 Provider 扩展
+- 继续扩展已支持的 OpenAI、火山方舟、OpenRouter ICU 与 ComfyUI 以外的真实 Provider
 - 安装包深度优化
 
 这些能力保留在 `spike/distribution` 分支或后续里程碑中，不阻塞当前产品闭环。

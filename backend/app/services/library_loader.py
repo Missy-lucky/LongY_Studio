@@ -191,18 +191,20 @@ def load_asset_library() -> dict:
                 """INSERT INTO categories(
                     id,name,body_zone,layer_order,required_views,default_detail_tasks,
                     default_partial_tasks,model_prompt_hints,negative_hints,is_sellable_default,
-                    builtin,version,created_at,updated_at
-                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    builtin,version,created_at,updated_at,group_name,parent_category_id
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(id) DO UPDATE SET name=excluded.name,body_zone=excluded.body_zone,
                     layer_order=excluded.layer_order,required_views=excluded.required_views,
                     default_detail_tasks=excluded.default_detail_tasks,
                     default_partial_tasks=excluded.default_partial_tasks,
                     model_prompt_hints=excluded.model_prompt_hints,negative_hints=excluded.negative_hints,
                     is_sellable_default=excluded.is_sellable_default,builtin=excluded.builtin,
-                    version=excluded.version,updated_at=excluded.updated_at""",
+                    version=excluded.version,updated_at=excluded.updated_at,
+                    group_name=excluded.group_name,parent_category_id=excluded.parent_category_id""",
                 (c["id"], c["name"], c["bodyZone"], c["layerOrder"], json.dumps(c["requiredViews"], ensure_ascii=False),
                  json.dumps(c["defaultDetailTasks"], ensure_ascii=False), json.dumps(c["defaultPartialTasks"], ensure_ascii=False),
-                 c["modelPromptHints"], c["negativeHints"], int(c["isSellableByDefault"]), int(c["builtin"]), 1, now, now),
+                 c["modelPromptHints"], c["negativeHints"], int(c["isSellableByDefault"]), int(c["builtin"]), 1, now, now,
+                 c["group"], c["parentId"]),
             )
             counts["categories"] += 1
         for path in sorted((LIBRARY_ROOT / "reference-styles").glob("*.json")):

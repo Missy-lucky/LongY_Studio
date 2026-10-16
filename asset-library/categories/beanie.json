@@ -1,0 +1,29 @@
+{
+  "id": "beanie",
+  "name": "冷帽",
+  "group": "配饰",
+  "parentId": "accessory",
+  "icon": "Crown",
+  "bodyZone": "头部",
+  "layerOrder": 40,
+  "requiredViews": [
+    "正面",
+    "反面",
+    "侧面",
+    "细节",
+    "材质"
+  ],
+  "defaultDetailTasks": [
+    "翻边",
+    "帽顶收口",
+    "针织纹理"
+  ],
+  "defaultPartialTasks": [
+    "头部正面佩戴",
+    "头部侧面佩戴"
+  ],
+  "modelPromptHints": "冷帽贴合头部，锁定翻边高度、帽顶形态、针织纹理和佩戴松量",
+  "negativeHints": "不添加帽檐，不改变翻边高度、帽顶收口、颜色、针织纹理或标识",
+  "isSellableByDefault": true,
+  "builtin": true
+}

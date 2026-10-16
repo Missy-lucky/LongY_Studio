@@ -1,0 +1,28 @@
+{
+  "schema": "longy.default-garments.v1",
+  "version": 1,
+  "items": [
+    {
+      "id": "neutral-crop-sports-tank",
+      "role": "upper-base",
+      "name": "浅石灰短款露脐运动背心",
+      "categoryId": "inner",
+      "color": "浅石灰",
+      "path": "asset-library/default-garments/neutral-sports-camisole.png",
+      "sha256": "5afbbe73f19b3164cfa98589c87bd92acca6e56af62cb73cdc5bf98b76ff85bd",
+      "generatedWith": "OpenAI built-in imagegen",
+      "licenseNote": "项目生成的默认补位素材；无品牌、无文字、无第三方标识"
+    },
+    {
+      "id": "neutral-yoga-shorts",
+      "role": "lower-base",
+      "name": "深灰高腰瑜伽短裤",
+      "categoryId": "shorts",
+      "color": "深石墨灰",
+      "path": "asset-library/default-garments/neutral-sports-shorts.png",
+      "sha256": "6389904ac8e3598cb04a7a45f6bb03d44ed0a9a9824fb2a5e53989d0db473470",
+      "generatedWith": "OpenAI built-in imagegen",
+      "licenseNote": "项目生成的默认补位素材；无品牌、无文字、无第三方标识"
+    }
+  ]
+}

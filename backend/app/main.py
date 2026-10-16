@@ -1,10 +1,13 @@
 """LongY Studio 本地服务入口。"""
 from contextlib import asynccontextmanager
+import os
+from pathlib import Path
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from .database import init_db
 from .services.library_loader import load_asset_library
-from .routers import assets, exports, items, library, projects, tasks
+from .routers import assets, care, exports, items, library, projects, provider_settings, references, tasks
 
 
 @asynccontextmanager
@@ -21,6 +24,9 @@ app.add_middleware(
 )
 app.include_router(library.router, prefix="/api/library", tags=["library"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
+app.include_router(provider_settings.router, prefix="/api/provider-settings", tags=["providers"])
+app.include_router(references.router, prefix="/api/projects/{project_id}", tags=["references"])
+app.include_router(care.router, prefix="/api/projects/{project_id}/care-cards", tags=["care"])
 app.include_router(assets.router, prefix="/api/projects/{project_id}/assets", tags=["assets"])
 app.include_router(items.router, prefix="/api/projects/{project_id}/items", tags=["items"])
 app.include_router(tasks.router, prefix="/api/projects/{project_id}/tasks", tags=["tasks"])
@@ -47,3 +53,13 @@ async def event_stream(ws: WebSocket, project_id: str) -> None:
             await ws.receive_text()
     except Exception:
         pass
+
+
+# The packaged desktop app points this at resources/web. Keeping the mount
+# opt-in preserves Vite's development proxy and makes the sidecar independently
+# testable without coupling ordinary backend runs to a frontend build.
+frontend_dir_value = os.getenv("LONGY_FRONTEND_DIR", "").strip()
+if frontend_dir_value:
+    frontend_dir = Path(frontend_dir_value).resolve()
+    if frontend_dir.is_dir() and (frontend_dir / "index.html").is_file():
+        app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")

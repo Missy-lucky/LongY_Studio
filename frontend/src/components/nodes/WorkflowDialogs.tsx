@@ -20,7 +20,9 @@ export function ProviderConfirmDialog() {
             <div className="mt-1 text-[11px] leading-5 text-text-secondary">
               将使用 <b>{confirm.providerName}</b> 提交 <b>{confirm.count}</b> 个图像编辑任务。真实生成会消耗 API 额度，并且受网络、模型服务和限额影响。
             </div>
-            <div className="mt-2 font-mono text-[11px] text-warning">预估成本：{confirm.estimatedCost}（Provider 估价值）</div>
+            <div className="mt-2 font-mono text-[11px] text-warning">
+              {confirm.estimatedCost > 0 ? `预估成本：${confirm.estimatedCost}（Provider 估价值）` : '成本：以 Provider 实际账单为准'}
+            </div>
             <div className="mt-2 text-[10px] text-text-muted">Mock Provider 不扣费；如需继续测试请切回 Mock。</div>
           </div>
         </div>
@@ -42,7 +44,7 @@ export function ExportPreviewCoverageDialog() {
 
   const groups = (['flat', 'partial', 'detail', 'model'] as const).map(type => ({
     type,
-    label: { flat: '平面图', partial: '局部图', detail: '细节图', model: '模特图' }[type],
+    label: { flat: '平面图', partial: '上身商品特写', detail: '细节图', model: '整套搭配展示' }[type],
     items: preview.coverage.filter(item => item.type === type),
   })).filter(group => group.items.length > 0)
 
@@ -121,6 +123,9 @@ export function ExportResultDialog() {
             <span className="flex items-center gap-1 text-success"><CheckCircle2 size={13}/>{result.exported} 张成功</span>
             <span className="text-text-muted">|</span>
             <span className="text-error">{result.failed.length} 张失败</span>
+          </div>
+          <div className="mb-3 rounded-lg border px-3 py-2 text-[10px] leading-4" style={{ borderColor: 'var(--border)', color: 'var(--text-3)' }}>
+            已生成 AI 内容来源清单：<span className="font-mono">{result.manifestPath}</span>
           </div>
           <div className="space-y-1.5">
             {result.files.map(file => (

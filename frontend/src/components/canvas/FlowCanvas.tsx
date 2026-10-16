@@ -192,10 +192,10 @@ export function FlowCanvas() {
         minZoom={0.2}
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
-        onNodeClick={(_, node) => {
+        onNodeClick={(_: unknown, node: Node) => {
           if (node.type === 'task') select({ kind: 'task', id: node.id })
         }}
-        onNodeDoubleClick={(_, node) => {
+        onNodeDoubleClick={(_: unknown, node: Node) => {
           rf.fitView({ nodes: [{ id: node.id }], duration: 300, maxZoom: 1.2 })
         }}
       >

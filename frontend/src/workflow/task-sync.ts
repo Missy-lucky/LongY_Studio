@@ -2,6 +2,7 @@ import type { AnyFlowNode, FlowOutputNode, OutputStatus, FlowProcessingNode } fr
 import type { RemoteTask } from '../services/api'
 
 export function outputStatus(status: string): OutputStatus {
+  if (['planned', 'cached', 'queued'].includes(status)) return 'queued'
   if (status === 'review') return 'pending'
   if (status === 'accepted') return 'satisfied'
   if (status === 'locked') return 'locked'
@@ -53,6 +54,8 @@ export function syncNodesWithTasks(
         tier: task.tier,
         qcScore: version?.qcScore ?? null,
         qcPassed: version?.qcPassed ?? null,
+        errorCode: version?.errorCode ?? null,
+        errorMessage: version?.errorMessage ?? null,
         versions: task.versions,
         thumbnail: version?.filePath
           ? `/api/projects/${projectId}/tasks/${task.id}/versions/${version.id}/file`

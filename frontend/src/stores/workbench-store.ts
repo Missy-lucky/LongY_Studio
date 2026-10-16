@@ -128,10 +128,10 @@ function buildTasksForItem(item: ProductItem, cat: CategoryConfig, models: Model
   }
   cat.requiredViews.slice(0, 4).forEach(v => tasks.push(mk('flat', `${item.name} ${v} 平面图`, v, `电商平面图，${v}视角，纯白背景，居中构图`)))
   cat.defaultDetailTasks.slice(0, 4).forEach(d => tasks.push(mk('detail', `${item.name} ${d} 细节图`, d, `细节微距图，重点展示${d}，浅灰渐变背景`)))
-  cat.defaultPartialTasks.slice(0, 3).forEach(p => tasks.push(mk('partial', `${item.name} ${p} 局部图`, p, `局部搭配图，${p}，三分法构图`)))
+  cat.defaultPartialTasks.slice(0, 3).forEach(p => tasks.push(mk('partial', `${item.name} ${p} 上身商品特写`, p, `模特真实穿着商品，紧裁到${p}区域，保持自然人体连接，不从全身图裁切放大`)))
   models.filter(m => m.enabled).forEach(m => {
     ['正面全身', '侧面全身', '背面全身'].forEach(a =>
-      tasks.push(mk('model', `${m.name.split(' ·')[0]} ${a} 模特图`, a, `模特图，${m.name}，${a}，影棚灰墙背景`)))
+      tasks.push(mk('model', `${m.name.split(' ·')[0]} ${a} 整套搭配展示`, a, `模特整套搭配展示，${m.name}，${a}，影棚灰墙背景`)))
   })
   return tasks
 }
@@ -216,6 +216,7 @@ export const useWorkbench = create<WorkbenchState>((set, get) => ({
       items = [...items, {
         id: itemId, name: mat.name.replace(/\.[^.]+$/, ''), categoryId,
         colorMaterial: '', sellingPoints: '', isSellable: cat?.isSellableByDefault ?? true,
+        structureFacts: {},
       }]
     }
     set({

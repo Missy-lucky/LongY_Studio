@@ -5,6 +5,8 @@ export interface ModelSelection {
   name: string
   group: string
   modelId?: string
+  referenceUrl?: string
+  source?: 'builtin' | 'custom'
 }
 
 export function modelReferenceUrl(modelId?: string): string {
@@ -20,10 +22,12 @@ export function applyModelSelection<T extends AnyFlowNode>(nodes: T[], selection
       ...node,
       data: {
         ...model.data,
+        modelId: selection.modelId,
         styleId: selection.id,
         styleName: selection.name,
         styleGroup: selection.group,
-        modelImage: modelReferenceUrl(selection.modelId),
+        modelImage: selection.referenceUrl ?? modelReferenceUrl(selection.modelId),
+        source: selection.source ?? 'builtin',
       },
     } as T
   })

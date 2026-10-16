@@ -6,6 +6,10 @@ import { fileURLToPath } from 'node:url'
 const frontend = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const source = path.resolve(frontend, '..', 'desktop', 'electron')
 const target = path.join(frontend, 'desktop-electron')
+const sidecar = path.resolve(frontend, '..', 'temp', 'build', 'sidecar', 'longy-sidecar', 'longy-sidecar.exe')
+if (!existsSync(sidecar)) {
+  throw new Error(`desktop sidecar missing: ${sidecar}; run scripts/package.ps1`)
+}
 await rm(target, { recursive: true, force: true })
 await mkdir(target, { recursive: true })
 await cp(source, target, { recursive: true })

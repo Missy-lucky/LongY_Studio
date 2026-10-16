@@ -32,11 +32,6 @@ export function Toasts() {
           <div className="min-w-0 flex-1">
             <div className="text-sm font-medium" style={{ color: 'var(--text)' }}>{t.title}</div>
             {t.detail && <div className="mt-0.5 text-xs" style={{ color: 'var(--text-2)' }}>{t.detail}</div>}
-            {t.hasDetail && (
-              <button className="mt-1.5 text-xs font-medium" style={{ color: 'var(--primary)' }}>
-                查看详情 →
-              </button>
-            )}
           </div>
           <button onClick={() => dismiss(t.id)} className="shrink-0" style={{ color: 'var(--text-3)' }}>
             <X size={13} strokeWidth={1.5}/>

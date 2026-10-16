@@ -1,0 +1,30 @@
+{
+  "id": "leatherJacket",
+  "name": "皮衣",
+  "group": "上装",
+  "parentId": "upper",
+  "icon": "Shirt",
+  "bodyZone": "躯干（外层）",
+  "layerOrder": 35,
+  "requiredViews": [
+    "正面",
+    "反面",
+    "侧面",
+    "细节",
+    "材质"
+  ],
+  "defaultDetailTasks": [
+    "翻领",
+    "拉链五金",
+    "袖口",
+    "皮革纹理"
+  ],
+  "defaultPartialTasks": [
+    "上半身正面穿着",
+    "上半身侧面穿着"
+  ],
+  "modelPromptHints": "皮衣位于最外层，锁定皮革光泽、翻领、拉链五金、衣长和肩部轮廓",
+  "negativeHints": "不改成布面夹克，不添加不存在的腰带、拉链、铆钉、口袋或标识",
+  "isSellableByDefault": true,
+  "builtin": true
+}

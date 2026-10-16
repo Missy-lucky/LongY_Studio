@@ -33,6 +33,7 @@ Thumbs.db
 
 # Legacy source archive and user-provided reference photos are not source code
 Model/
+总览.xlsx
 asset-library/reference-images/
 
 # Keep runtime SQLite out of version control

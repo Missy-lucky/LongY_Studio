@@ -6,6 +6,7 @@ import json
 from ..database import get_db
 from ..providers import resolve_provider
 from ..services.library_loader import SHOT_GROUPS, load_shot_templates
+from ..services.outfit_fallbacks import resolve_outfit_fallbacks
 from .task_planner import _expand_template_shots, _load_preset
 
 SELECTION_STATUSES = {"selected", "fulfilled", "waived"}
@@ -23,6 +24,8 @@ def _shot_view(shot: dict, selection: dict | None, estimated_cost: float) -> dic
         "required": bool(shot.get("required", shot.get("priority") == "P0")),
         "isCustom": bool(shot.get("isCustom", False)),
         "promptHints": shot.get("promptHints", ""),
+        "promptMode": selection["prompt_mode"] if selection else "default",
+        "customPrompt": selection["custom_prompt"] if selection else "",
         "status": status,
         "source": selection["source"] if selection else "ai",
         "assetId": selection["asset_id"] if selection else None,
@@ -58,11 +61,27 @@ def build_shot_plan_preview(
                 (project_id,),
             ).fetchall()
         }
-        models = db.execute("SELECT id FROM models WHERE enabled=1 ORDER BY id").fetchall()
+        models = db.execute(
+            """SELECT id FROM models
+               WHERE enabled=1 AND (project_id IS NULL OR project_id=?) ORDER BY id""",
+            (project_id,),
+        ).fetchall()
         if model_ids is not None:
             selected_models = set(model_ids)
             models = [row for row in models if row["id"] in selected_models]
+        else:
+            selected_model = db.execute(
+                "SELECT selected_model_id FROM projects WHERE id=?", (project_id,)
+            ).fetchone()
+            if selected_model and selected_model["selected_model_id"]:
+                models = [
+                    model for model in models
+                    if model["id"] == selected_model["selected_model_id"]
+                ]
         model_count = max(1, len(models))
+        outfit_fallbacks = resolve_outfit_fallbacks(
+            item["category_id"] for item in items
+        )
 
         out_items = []
         for item in items:
@@ -119,6 +138,16 @@ def build_shot_plan_preview(
             "presetId": preset["id"],
             "tier": preset["tier"],
             "provider": provider.id,
+            "outfitFallbacks": [
+                {
+                    "id": fallback.id,
+                    "role": fallback.role,
+                    "name": fallback.name,
+                    "reason": fallback.reason,
+                    "previewUrl": f"/api/library/default-garments/{fallback.id}/file",
+                }
+                for fallback in outfit_fallbacks
+            ],
             "items": out_items,
             "selectedCount": sum(item["selectedCount"] for item in out_items),
             "estimatedCost": sum(item["estimatedCost"] for item in out_items),

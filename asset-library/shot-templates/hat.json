@@ -4,8 +4,8 @@
   "category": "hat",
   "categoryName": "帽子",
   "group": "配饰",
-  "version": "1.0.0",
-  "updatedAt": "2026-10-11",
+  "version": "1.1.0",
+  "updatedAt": "2026-10-16",
   "description": "帽子品类标准电商套图镜头清单。任务规划器按 shots 自动展开任务，按 conditionalShots 与商品属性自动加减镜头，导出前按模板做完整性校验。",
   "attributes": [
     {
@@ -91,13 +91,14 @@
     "partial": [
       {
         "id": "partial-folded",
-        "name": "折叠形态图",
+        "name": "帽子模特穿搭·折叠特写",
         "type": "partial",
         "required": false,
         "priority": "P1",
-        "promptHints": "可折叠收纳形态展示",
+        "promptHints": "模特真实穿着或佩戴帽子，紧裁到商品区域，重点呈现折叠；保留必要的人体连接与自然姿态，商品完整清晰，不从全身成图裁切放大",
         "references": [
-          "garment"
+          "garment",
+          "model-identity"
         ]
       }
     ],

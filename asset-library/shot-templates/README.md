@@ -2,12 +2,12 @@
 
 本目录存放按品类划分的电商套图镜头清单（Shot List）。任务规划器读取这里的 JSON，把一个商品自动展开成完整的多图任务，导出前做完整性校验。
 
-当前已覆盖全部 33 个品类（与 asset-library/categories/all.json 一一对应）：
+当前已覆盖全部 42 个二级品类（与 asset-library/categories/all.json 一一对应）：
 
-- 上装（9）：top、inner、coat、vest、shirt、tshirt、hoodie、sweater、blazer
-- 下装（6）：pants、skirt、shorts、jeans、halfSkirt、dress
+- 上装（12）：top、inner、coat、vest、shirt、tshirt、hoodie、sweater、blazer、leatherJacket、jacket、paddedCoat
+- 下装（8）：pants、skirt、shorts、jeans、halfSkirt、dress、casualPants、suitPants
 - 鞋履（5）：shoes、boots、heels、sneakers、slippers
-- 配饰（9）：hat、belt、scarf、earring、necklace、bracelet、watch、sunglasses、ring
+- 配饰（13）：hat、beanie、baseballCap、belt、scarf、silkScarf、tie、earring、necklace、bracelet、watch、sunglasses、ring
 - 包袋（4）：handbag、backpack、crossbody、wallet
 
 ## 文件规则
@@ -31,7 +31,7 @@
 
 - id：稳定英文标识，任务引用与导出校验都靠它
 - name：中文名称
-- type：flat（平面图）/ partial（展示图）/ detail（细节图）/ model（模特上身图）
+- type：flat（平面图）/ partial（模特上身商品特写）/ detail（细节图）/ model（模特整套搭配展示）
 - required：是否必出；生成规则为 priority=P0 时 required=true，导出前校验缺图
 - priority：P0 必出核心 / P1 推荐补充（不阻塞导出）/ P2 加分项，草稿与快检方案按优先级裁剪
 - promptHints：追加到品类基础提示词后的镜头级描述

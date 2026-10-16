@@ -12,6 +12,7 @@ from typing import Any
 from ..config import PROJECT_ROOT, settings
 from ..services.detail_repair import detail_repair_prompt
 from ..services.image_qc import inspect_image, normalize_flat_output
+from ..services.provider_config import load_api_key, provider_setting
 from .base import (
     Cancellable,
     GenerateError,
@@ -22,7 +23,11 @@ from .base import (
 
 
 def _cli_candidates() -> list[Path]:
-    configured = os.getenv("LONGY_OPENROUTER_ICU_CLI") or os.getenv("OPENROUTER_ICU_CLI")
+    configured = (
+        provider_setting("openrouter-icu", "cliPath")
+        or os.getenv("LONGY_OPENROUTER_ICU_CLI")
+        or os.getenv("OPENROUTER_ICU_CLI")
+    )
     return [
         Path(configured) if configured else None,
         PROJECT_ROOT / "tools" / "openrouter_icu_image.py",
@@ -34,7 +39,7 @@ def find_cli() -> Path | None:
 
 
 def api_key() -> str:
-    return os.getenv("OPENROUTER_ICU_API_KEY", "").strip()
+    return load_api_key("openrouter-icu")
 
 
 def resolve_reference(value: str) -> Path:
@@ -46,13 +51,31 @@ def resolve_reference(value: str) -> Path:
     return settings.data_dir / path
 
 
+def classify_provider_error(message: str) -> tuple[str, str, bool]:
+    """Map CLI/API text to stable UI-facing error codes without exposing credentials."""
+    normalized = message.lower()
+    if any(token in normalized for token in ("insufficient credit", "insufficient_quota", "quota exceeded", "余额不足")):
+        return "QUOTA_EXCEEDED", "额度不足，请充值或切换模型后重试", False
+    if any(token in normalized for token in ("401", "unauthorized", "invalid api key", "authentication")):
+        return "AUTHENTICATION_FAILED", "API Key 无效或已失效，请重新配置", False
+    if any(token in normalized for token in ("429", "rate limit", "too many requests")):
+        return "RATE_LIMITED", "请求过于频繁，请稍后重试或切换模型", True
+    if any(token in normalized for token in ("content policy", "safety", "moderation", "内容审核")):
+        return "CONTENT_REJECTED", "请求被内容审核拒绝，请调整素材或提示词", False
+    return "IMAGE_EDIT_FAILED", "查看 Provider 调用记录后重试；不要盲目提高并发", True
+
+
 class OpenRouterICUProvider(ImageProvider):
     id = "openrouter-icu"
     name = "OpenRouter ICU 图像编辑"
     supported_tiers = ("draft", "hd")
-    price_per_image = {"draft": 1.0, "hd": 5.0}
+    price_per_image = {"draft": 0.0, "hd": 0.0}
     rate_limit_per_min = 8
     max_retries = 2
+    capabilities = {
+        "textToImage": True, "imageEdit": True, "maskEdit": True,
+        "maxReferenceImages": 16, "customBaseUrl": True, "local": False,
+    }
 
     @property
     def available(self) -> bool:
@@ -105,6 +128,8 @@ class OpenRouterICUProvider(ImageProvider):
             width, height = self._output_size(req)
             command = [
                 sys.executable, str(cli), "edit" if references else "generate",
+                "--base-url", provider_setting(self.id, "baseUrl", "https://tokenadvent.com"),
+                "--model", provider_setting(self.id, "model", "gpt-image-2.5"),
                 "--prompt", req.prompt,
                 "--size", f"{width}x{height}",
                 "--quality", "medium" if req.tier == "draft" else "high",
@@ -160,8 +185,8 @@ class OpenRouterICUProvider(ImageProvider):
                     if cancelled.wait(timeout=min(30, 5 * attempt)):
                         return
             else:
-                fail("IMAGE_EDIT_FAILED", last_error or "图像编辑失败",
-                     "查看 Provider 调用记录后重试；不要盲目提高并发", True)
+                code, suggestion, retryable = classify_provider_error(last_error)
+                fail(code, last_error or "图像编辑失败", suggestion, retryable)
                 return
 
             if cancelled.is_set() or not output.is_file():
@@ -174,6 +199,8 @@ class OpenRouterICUProvider(ImageProvider):
                 repair_references = [output, *references[:3]]
                 repair_command = [
                     sys.executable, str(cli), "edit",
+                    "--base-url", provider_setting(self.id, "baseUrl", "https://tokenadvent.com"),
+                    "--model", provider_setting(self.id, "model", "gpt-image-2.5"),
                     "--prompt", detail_repair_prompt(req.task_type),
                     "--size", f"{width}x{height}",
                     "--quality", "high",
@@ -243,7 +270,7 @@ class OpenRouterICUProvider(ImageProvider):
 
             on_complete(GenerateResult(
                 file_path=str(output),
-                cost=self.price_per_image.get(req.tier, 1.0),
+                cost=self.estimate(req.tier, 1),
                 duration_ms=int((time.time() - started) * 1000),
             ))
 

@@ -1,0 +1,30 @@
+{
+  "id": "paddedCoat",
+  "name": "棉服",
+  "group": "上装",
+  "parentId": "upper",
+  "icon": "Shirt",
+  "bodyZone": "躯干（外层）",
+  "layerOrder": 35,
+  "requiredViews": [
+    "正面",
+    "反面",
+    "侧面",
+    "细节",
+    "材质"
+  ],
+  "defaultDetailTasks": [
+    "充棉分格",
+    "帽领",
+    "门襟",
+    "袖口"
+  ],
+  "defaultPartialTasks": [
+    "上半身正面穿着",
+    "保暖厚度侧面"
+  ],
+  "modelPromptHints": "棉服位于最外层，锁定充棉厚度、绗缝分格、衣长、帽领和门襟",
+  "negativeHints": "不改成羽绒服或薄夹克，不改变充棉分格、厚度、衣长、颜色或标识",
+  "isSellableByDefault": true,
+  "builtin": true
+}

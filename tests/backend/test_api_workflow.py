@@ -1,4 +1,5 @@
 import os
+import json
 import shutil
 import time
 from pathlib import Path
@@ -61,6 +62,9 @@ def test_full_backend_mock_workflow(client: TestClient):
 
     for task in tasks:
         assert client.post(
+            f"/api/projects/{pid}/tasks/{task['id']}/review", json={"action": "accept"}
+        ).json()["ok"]
+        assert client.post(
             f"/api/projects/{pid}/tasks/{task['id']}/review", json={"action": "lock"}
         ).json()["ok"]
     preview = client.get(f"/api/projects/{pid}/exports/preview").json()
@@ -70,6 +74,12 @@ def test_full_backend_mock_workflow(client: TestClient):
     exported = client.post(f"/api/projects/{pid}/exports", json={"taskIds": [tasks[0]["id"]]}).json()
     assert exported["exported"] == 1
     assert Path(exported["mapping"][0]["written"]).is_file()
+    manifest_path = Path(exported["manifestPath"])
+    assert manifest_path.is_file()
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["containsAiGeneratedContent"] is True
+    assert manifest["files"][0]["contentOrigin"] == "ai-generated"
+    assert len(manifest["files"][0]["sha256"]) == 64
 
 
 
@@ -191,6 +201,8 @@ def test_legacy_v2_template_flow(client: TestClient):
     assert "Image 1 is the authoritative original clothing" in templates["flatBase"]
     assert "Retouch Image 1 only" in templates["flatRetouch"]
     assert templates["qualityGates"]["borderWhiteMin"] == 0.97
+    assert templates["calibration"]["id"] == "example-calibration-v1"
+    assert templates["calibration"]["evidenceSummary"]["rejectedOutput"] == 48
 
     planned = client.post(f"/api/projects/{pid}/tasks/plan", json={
         "presetId": "fast-check", "provider": "mock", "replaceExisting": True,
@@ -227,3 +239,80 @@ def test_legacy_v2_template_flow(client: TestClient):
 
     providers = client.get("/api/providers").json()["providers"]
     assert {p["id"] for p in providers} >= {"mock", "openrouter-icu"}
+
+
+def test_item_asset_replace_recategory_and_delete_are_persistent(client: TestClient):
+    from io import BytesIO
+
+    from PIL import Image
+
+    project = client.post("/api/projects", json={
+        "sku": f"LIFECYCLE-{os.getpid()}", "name": "素材生命周期",
+        "platform": "taobao", "style": "简约", "budget": 10,
+    }).json()
+    project_id = project["id"]
+    item = client.post(f"/api/projects/{project_id}/items", json={
+        "name": "待替换上衣", "categoryId": "top", "isSellable": True,
+    }).json()
+
+    def png_bytes(color: tuple[int, int, int]) -> bytes:
+        buffer = BytesIO()
+        Image.new("RGB", (320, 400), color).save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    imported = client.post(
+        f"/api/projects/{project_id}/assets/import",
+        files={"files": ("front-red.png", png_bytes((180, 20, 30)), "image/png")},
+    ).json()
+    assert imported["imported"] == 1
+    original = client.get(f"/api/projects/{project_id}/assets").json()["assets"][0]
+    client.post(f"/api/projects/{project_id}/assets/{original['id']}/confirm", json={
+        "categoryId": "top", "viewSlot": "front", "itemId": item["id"],
+    })
+    original_path = DATA_DIR / original["filePath"]
+    assert original_path.is_file()
+
+    replaced = client.post(
+        f"/api/projects/{project_id}/assets/{original['id']}/replace",
+        files={"file": ("front-blue.png", png_bytes((20, 40, 180)), "image/png")},
+    )
+    assert replaced.status_code == 200
+    replacement = replaced.json()["asset"]
+    assert replacement["id"] == original["id"]
+    assert replacement["itemId"] == item["id"]
+    assert replacement["hash"] != original["hash"]
+    replacement_path = DATA_DIR / replacement["filePath"]
+    assert replacement_path.is_file()
+    assert not original_path.exists()
+    assert len(client.get(f"/api/projects/{project_id}/items").json()["items"]) == 1
+    assert len(client.get(f"/api/projects/{project_id}/assets").json()["assets"]) == 1
+
+    client.post(f"/api/projects/{project_id}/tasks/plan", json={
+        "presetId": "fast-check", "provider": "mock", "replaceExisting": True,
+        "shotIds": ["flat-front"],
+    })
+    assert client.get(f"/api/projects/{project_id}/tasks").json()["tasks"]
+
+    recategorized = client.patch(f"/api/projects/{project_id}/items/{item['id']}", json={
+        "categoryId": "pants", "attributes": {}, "structureFacts": {},
+    })
+    assert recategorized.status_code == 200
+    assert recategorized.json()["categoryId"] == "pants"
+    asset_after_category = client.get(f"/api/projects/{project_id}/assets").json()["assets"][0]
+    assert asset_after_category["categoryId"] == "pants"
+    assert client.get(f"/api/projects/{project_id}/tasks").json()["tasks"] == []
+
+    client.post(f"/api/projects/{project_id}/tasks/plan", json={
+        "presetId": "fast-check", "provider": "mock", "replaceExisting": True,
+        "shotIds": ["flat-front"],
+    })
+    tasks = client.get(f"/api/projects/{project_id}/tasks").json()["tasks"]
+    assert tasks and {task["itemId"] for task in tasks} == {item["id"]}
+    assert all("裤装" in task["prompt"] or "裤子" in task["prompt"] for task in tasks)
+
+    deleted = client.delete(f"/api/projects/{project_id}/items/{item['id']}")
+    assert deleted.status_code == 200 and deleted.json()["deleted"] is True
+    assert client.get(f"/api/projects/{project_id}/items").json()["items"] == []
+    assert client.get(f"/api/projects/{project_id}/assets").json()["assets"] == []
+    assert client.get(f"/api/projects/{project_id}/tasks").json()["tasks"] == []
+    assert not replacement_path.exists()

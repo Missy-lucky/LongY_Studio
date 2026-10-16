@@ -7,15 +7,46 @@ from ..config import PROJECT_ROOT
 from ..database import get_db, utc_now
 from ..providers import resolve_provider
 from ..services.library_loader import SHOT_GROUPS, load_shot_templates
-from ..services.prompt_builder import _templates, build_prompt
+from ..services.garment_structure import render_structure_facts
+from ..services.outfit_fallbacks import resolve_outfit_fallbacks
+from ..services.prompt_builder import _templates, build_prompt, calibrated_negative_prompt
 
 PRESET_ROOT = PROJECT_ROOT / "asset-library" / "generation-presets"
 SHOT_TYPE_NAMES = {
     "flat": "平面图",
     "detail": "细节图",
-    "partial": "局部图",
-    "model": "模特图",
+    "partial": "模特上身商品特写",
+    "model": "模特上身搭配展示",
 }
+
+def _outfit_context(items) -> str:
+    """Build a deterministic outfit manifest and conservative missing-layer policy."""
+    lines = [
+        f"- {item['name']}（{item['category_name']}，{'售卖商品' if item['is_sellable'] else '搭配素材'}）"
+        for item in items
+    ]
+    fallbacks = resolve_outfit_fallbacks(item["category_id"] for item in items)
+    lines.extend(fallback.prompt_line for fallback in fallbacks)
+    return "\n".join(lines)
+
+
+def _reference_context(references, task_type: str) -> str:
+    role_rules = {
+        "pose": "只参考人体动作和构图，不复制人物身份、服装或背景",
+        "style": "只参考光线、背景和商业构图，不复制人物与商品",
+        "detail": "只作为商品局部结构证据，不改变权威商品图的颜色和版型",
+    }
+    applicable_roles = {
+        "flat": {"style"},
+        "detail": {"style", "detail"},
+        "partial": {"pose", "style", "detail"},
+        "model": {"pose", "style"},
+    }[task_type]
+    return "\n".join(
+        f"- {row['role']}: {row['name']}；{role_rules[row['role']]}"
+        for row in references
+        if row["role"] in applicable_roles
+    )
 
 
 def _load_preset(preset_id: str) -> dict:
@@ -33,8 +64,11 @@ def _cache_key(
     tier: str,
     prompt: str,
     provider: str,
+    input_fingerprint: str,
 ) -> str:
-    raw = "\n".join((item_id, task_type, shot_id, priority, tier, prompt, provider))
+    raw = "\n".join((
+        item_id, task_type, shot_id, priority, tier, prompt, provider, input_fingerprint,
+    ))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
@@ -105,6 +139,7 @@ def plan_tasks(
     preset = _load_preset(preset_id)
     provider = resolve_provider(provider_id)
     legacy_negative = _templates()["negativePrompt"]
+    evidence_negative = calibrated_negative_prompt()
     templates = load_shot_templates()
     allowed_priorities = _allowed_priorities(preset_id)
     db = get_db()
@@ -122,16 +157,42 @@ def plan_tasks(
             (project_id,),
         ).fetchone()["n"]
         items = db.execute(
-            """SELECT i.*, c.name category_name,c.required_views,c.default_detail_tasks,
+            """SELECT i.*, c.name category_name,c.group_name category_group,
+                      c.required_views,c.default_detail_tasks,
                       c.default_partial_tasks,c.model_prompt_hints,c.negative_hints
                FROM items i JOIN categories c ON c.id=i.category_id
                WHERE i.project_id=? ORDER BY i.created_at,i.id""",
             (project_id,),
         ).fetchall()
-        models = db.execute("SELECT * FROM models WHERE enabled=1 ORDER BY id").fetchall()
+        models = db.execute(
+            """SELECT * FROM models
+               WHERE enabled=1 AND (project_id IS NULL OR project_id=?) ORDER BY id""",
+            (project_id,),
+        ).fetchall()
         if model_ids is not None:
             selected = set(model_ids)
             models = [model for model in models if model["id"] in selected]
+        else:
+            selected_model = db.execute(
+                "SELECT selected_model_id FROM projects WHERE id=?", (project_id,)
+            ).fetchone()
+            if selected_model and selected_model["selected_model_id"]:
+                models = [
+                    model for model in models
+                    if model["id"] == selected_model["selected_model_id"]
+                ]
+
+        project_references = db.execute(
+            """SELECT id,role,name,hash FROM project_references
+               WHERE project_id=? ORDER BY role,created_at,id""",
+            (project_id,),
+        ).fetchall()
+        project_asset_hashes = [
+            row["hash"] for row in db.execute(
+                "SELECT hash FROM assets WHERE project_id=? ORDER BY item_id,created_at,id",
+                (project_id,),
+            ).fetchall()
+        ]
 
         primary_item = next(
             (item for item in items if item["is_sellable"]),
@@ -145,10 +206,17 @@ def plan_tasks(
             ).fetchall()
         }
 
+        outfit_fallbacks = resolve_outfit_fallbacks(item["category_id"] for item in items)
+        outfit_context = _outfit_context(items)
         def add(item, shot: dict, model=None):
             nonlocal max_code
             max_code += 1
             task_type = shot["type"]
+            selection = selection_rows.get((item["id"], shot["id"]), {})
+            custom_prompt = (
+                selection.get("custom_prompt", "")
+                if selection.get("prompt_mode") == "custom" else ""
+            )
             prompt = build_prompt(
                 task_type,
                 item["name"],
@@ -159,10 +227,31 @@ def plan_tasks(
                 model["name"] if model else None,
                 item["model_prompt_hints"],
                 shot["promptHints"],
+                outfit_context,
+                _reference_context(project_references, task_type),
+                item["category_group"],
+                render_structure_facts(json.loads(item["structure_json"] or "{}")),
+                custom_prompt,
             )
+            fingerprint_parts = [*project_asset_hashes]
+            fingerprint_parts.extend(
+                f"{row['role']}:{row['id']}:{row['hash']}" for row in project_references
+            )
+            if model:
+                fingerprint_parts.append(
+                    f"model:{model['id']}:{model['version']}:{model['reference_hash'] or ''}"
+                )
+            if task_type in {"partial", "model"}:
+                fingerprint_parts.extend(
+                    f"fallback:{fallback.id}:{fallback.sha256}"
+                    for fallback in outfit_fallbacks
+                )
+            input_fingerprint = hashlib.sha256(
+                "\n".join(fingerprint_parts).encode("utf-8")
+            ).hexdigest()
             key = _cache_key(
                 item["id"], task_type, shot["id"], shot["priority"],
-                preset["tier"], prompt, provider.id,
+                preset["tier"], prompt, provider.id, input_fingerprint,
             )
             existing_cache = db.execute(
                 "SELECT file_path FROM cache_entries WHERE cache_key=?", (key,)
@@ -170,7 +259,15 @@ def plan_tasks(
             tid = uuid.uuid4().hex[:12]
             name = f"{item['name']} {shot['name']}"
             category_negative = item["negative_hints"] or ""
-            negative_prompt = " ".join(x for x in (category_negative, legacy_negative) if x)
+            structure_negative = (
+                "不得改变已记录的版型、领型、袖型、扣件、口袋、腰头、下摆、图案、标识或其他结构事实。"
+                if item["structure_json"] not in (None, "", "{}") else ""
+            )
+            negative_prompt = " ".join(
+                x for x in (
+                    category_negative, structure_negative, legacy_negative, evidence_negative,
+                ) if x
+            )
             db.execute(
                 """INSERT INTO tasks(
                        id,project_id,item_id,model_id,code,name,type,tier,status,provider,prompt,
@@ -223,10 +320,15 @@ def plan_tasks(
                 ]
             skipped += len(expanded) - len(visible)
 
+            partial_index = 0
             for shot in visible:
                 if shot["type"] == "model":
                     continue
-                add(item, shot)
+                model = None
+                if shot["type"] == "partial" and models:
+                    model = models[partial_index % len(models)]
+                    partial_index += 1
+                add(item, shot, model)
 
             # 模特镜头仍按模板展开；多个已选模特身份按镜头轮换，避免破坏镜头清单。
             if item["id"] == (primary_item["id"] if primary_item else None):

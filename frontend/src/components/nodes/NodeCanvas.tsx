@@ -4,16 +4,21 @@ import '@xyflow/react/dist/style.css'
 
 import { useNodeStore } from '../../stores/node-store'
 import { useWorkbench } from '../../stores/workbench-store'
-import { InputNodeComponent, ModelNodeComponent, ProcessingNodeComponent, OutputNodeComponent } from './NodeComponents'
+import { CareInputNodeComponent, CareOutputNodeComponent, InputNodeComponent, ModelNodeComponent, PoseNodeComponent, ReferenceNodeComponent, ProcessingNodeComponent, OutputNodeComponent } from './NodeComponents'
 import { TypePicker, ModelPicker } from './TypePicker'
 import { NodeImageViewer } from './ImageViewer'
 import { VersionQcDialog } from './VersionQcDialog'
 import { ExportPreviewCoverageDialog, ExportResultDialog, ProjectSettingsDialog, ProviderConfirmDialog } from './WorkflowDialogs'
 import { EDGE_COLORS, type ProcessType } from '../../types/node-system'
+import { CareCardDialog } from './CareCardDialog'
 
 const nodeTypes: NodeTypes = {
   inputNode: InputNodeComponent as any,
   modelNode: ModelNodeComponent as any,
+  poseNode: PoseNodeComponent as any,
+  referenceNode: ReferenceNodeComponent as any,
+  careInputNode: CareInputNodeComponent as any,
+  careOutputNode: CareOutputNodeComponent as any,
   processingNode: ProcessingNodeComponent as any,
   outputNode: OutputNodeComponent as any,
 }
@@ -53,15 +58,19 @@ export function NodeCanvas() {
 
   const rfNodes = useMemo<Node[]>(() => {
     const focusedTypes = {
-      prepare: ['input', 'model'],
-      generate: ['processing', 'output'],
-      review: ['output'],
-      export: ['output'],
+      prepare: ['input', 'model', 'pose', 'reference', 'careInput'],
+      generate: ['processing', 'output', 'careInput', 'careOutput'],
+      review: ['output', 'careOutput'],
+      export: ['output', 'careOutput'],
     }[mode]
     return nodes.map(n => ({
       id: n.id,
       type: n.type === 'input' ? 'inputNode'
         : n.type === 'model' ? 'modelNode'
+        : n.type === 'pose' ? 'poseNode'
+        : n.type === 'reference' ? 'referenceNode'
+        : n.type === 'careInput' ? 'careInputNode'
+        : n.type === 'careOutput' ? 'careOutputNode'
         : n.type === 'processing' ? 'processingNode'
         : 'outputNode',
       position: n.position,
@@ -83,6 +92,9 @@ export function NodeCanvas() {
         opacity: ({
           material: 0.30,
           model: 0.48,
+          pose: 0.48,
+          reference: 0.42,
+          care: 0.46,
           output: 0.42,
           review: 0.28,
           regen: 0.34,
@@ -152,7 +164,7 @@ export function NodeCanvas() {
         nodesDraggable
         elementsSelectable
         elevateEdgesOnSelect
-        onNodeDoubleClick={(_, node) => rf.fitView({ nodes: [{ id: node.id }], duration: 300, maxZoom: 1.2 })}
+        onNodeDoubleClick={(_: unknown, node: Node) => rf.fitView({ nodes: [{ id: node.id }], duration: 300, maxZoom: 1.2 })}
         fitView
         fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
         onlyRenderVisibleElements
@@ -182,6 +194,7 @@ export function NodeCanvas() {
       <ExportPreviewCoverageDialog/>
       <ExportResultDialog/>
       <ProjectSettingsDialog/>
+      <CareCardDialog/>
     </div>
   )
 }

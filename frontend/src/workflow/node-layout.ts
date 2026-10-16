@@ -23,6 +23,10 @@ interface Rect {
 export const NODE_SIZE = {
   input: { width: 220, height: 320 },
   model: { width: 220, height: 390 },
+  pose: { width: 220, height: 250 },
+  reference: { width: 220, height: 250 },
+  careInput: { width: 240, height: 150 },
+  careOutput: { width: 220, height: 330 },
   processing: { width: 240, height: 150 },
 } satisfies Record<string, Size>
 
@@ -70,9 +74,31 @@ export const modelPosition = (inputCount: number) => {
   return { x: INPUT_COLUMNS[0], y: bottom + NODE_GAP }
 }
 
+export const referencePosition = (inputCount: number, index: number) => {
+  const model = modelPosition(inputCount)
+  return { x: INPUT_COLUMNS[1], y: model.y + index * (NODE_SIZE.reference.height + NODE_GAP) }
+}
+
+export const careInputPosition = (inputCount: number, referenceCount: number) => {
+  const model = modelPosition(inputCount)
+  const referenceBottom = referenceCount > 0
+    ? model.y + referenceCount * (NODE_SIZE.reference.height + NODE_GAP)
+    : model.y + NODE_SIZE.model.height
+  return { x: INPUT_COLUMNS[0], y: referenceBottom + NODE_GAP }
+}
+
+export const careOutputPosition = (inputCount: number, referenceCount: number, index: number) => {
+  const input = careInputPosition(inputCount, referenceCount)
+  return { x: INPUT_COLUMNS[1], y: input.y + index * (NODE_SIZE.careOutput.height + NODE_GAP) }
+}
+
 export function nodeSize(node: AnyFlowNode): Size {
   if (node.type === 'input') return NODE_SIZE.input
   if (node.type === 'model') return NODE_SIZE.model
+  if (node.type === 'pose') return NODE_SIZE.pose
+  if (node.type === 'reference') return NODE_SIZE.reference
+  if (node.type === 'careInput') return NODE_SIZE.careInput
+  if (node.type === 'careOutput') return NODE_SIZE.careOutput
   if (node.type === 'processing') return NODE_SIZE.processing
   return OUTPUT_SIZE[(node as FlowOutputNode).data.imageType]
 }
@@ -132,7 +158,7 @@ export function organizeNodes(nodes: AnyFlowNode[]): AnyFlowNode[] {
 
   // Source nodes are user-owned. Their actual rectangles become collision walls.
   nodes.forEach(node => {
-    if (node.type !== 'input' && node.type !== 'model') return
+    if (!['input', 'model', 'pose', 'reference', 'careInput', 'careOutput'].includes(node.type)) return
     positions.set(node.id, node.position)
     occupied.push(rect(node))
   })

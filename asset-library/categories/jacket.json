@@ -1,0 +1,30 @@
+{
+  "id": "jacket",
+  "name": "夹克",
+  "group": "上装",
+  "parentId": "upper",
+  "icon": "Shirt",
+  "bodyZone": "躯干（外层）",
+  "layerOrder": 35,
+  "requiredViews": [
+    "正面",
+    "反面",
+    "侧面",
+    "细节",
+    "材质"
+  ],
+  "defaultDetailTasks": [
+    "领型",
+    "门襟",
+    "袖口",
+    "下摆"
+  ],
+  "defaultPartialTasks": [
+    "上半身正面穿着",
+    "上半身背面穿着"
+  ],
+  "modelPromptHints": "夹克位于最外层，锁定短款衣长、领型、门襟、袖口和下摆结构",
+  "negativeHints": "不改变夹克衣长和廓形，不添加不存在的帽子、拉链、纽扣、口袋或标识",
+  "isSellableByDefault": true,
+  "builtin": true
+}

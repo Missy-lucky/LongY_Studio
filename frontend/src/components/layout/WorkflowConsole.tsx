@@ -94,6 +94,8 @@ export function WorkflowConsole() {
   const uploadImage = useNodeStore(state => state.uploadImage)
   const removeNode = useNodeStore(state => state.removeNode)
   const setInputAttribute = useNodeStore(state => state.setInputAttribute)
+  const setInputStructureFact = useNodeStore(state => state.setInputStructureFact)
+  const saveInputFacts = useNodeStore(state => state.saveInputFacts)
   const openImageViewer = useNodeStore(state => state.openImageViewer)
   const selectedNodeId = useNodeStore(state => state.selectedNodeId)
   const setSelected = useNodeStore(state => state.setSelected)
@@ -470,7 +472,11 @@ export function WorkflowConsole() {
                         <Maximize2 size={11}/>
                       </button>
                     )}
-                    <button onClick={() => removeNode(selectedInput.id)} className="btn btn-secondary !min-h-[26px] !px-2 !text-[10px]" title="删除部位">
+                    <button disabled={busy} onClick={() => {
+                      if (window.confirm(`确定删除“${selectedInput.data.categoryName}”及其关联生成任务吗？此操作不会删除已经导出到其他目录的图片。`)) {
+                        void removeNode(selectedInput.id)
+                      }
+                    }} className="btn btn-secondary !min-h-[26px] !px-2 !text-[10px]" title="删除部位">
                       <Trash2 size={11}/>
                     </button>
                   </div>
@@ -484,16 +490,44 @@ export function WorkflowConsole() {
                   {selectedInput.data.attributeOptions.map(attribute => (
                     <label key={attribute.key} className={clsx(
                       'flex items-center gap-2 rounded-md px-1.5 py-1.5 text-[11px] transition',
-                      selectedInput.data.image?.remote ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-[var(--surface-hover)]',
+                      'cursor-pointer hover:bg-[var(--surface-hover)]',
                     )} style={{ color: 'var(--text-2)' }}>
                       <input type="checkbox" className="h-3 w-3 accent-[var(--primary)]"
                         checked={Boolean(selectedInput.data.attributes[attribute.key])}
-                        disabled={Boolean(selectedInput.data.image?.remote)}
                         onChange={event => setInputAttribute(selectedInput.id, attribute.key, event.target.checked)}/>
                       <span>{attribute.label}</span>
                     </label>
                   ))}
                 </div>
+              </Section>
+            )}
+
+            {selectedInput.data.structureFieldOptions.length > 0 && (
+              <Section title="结构锁定">
+                <div className="mb-2 text-[10px] leading-4" style={{ color: 'var(--text-3)' }}>
+                  只填写能从原图确认的事实。它们会进入默认提示词，并在质检报告中形成逐项人工核对清单。
+                </div>
+                <div className="space-y-2">
+                  {selectedInput.data.structureFieldOptions.map(field => (
+                    <label key={field.key} className="block">
+                      <span className="mb-1 block text-[10px]" style={{ color: 'var(--text-2)' }}>{field.label}</span>
+                      <input
+                        className="input !min-h-[30px] !py-1.5 !text-[10px]"
+                        value={selectedInput.data.structureFacts[field.key] ?? ''}
+                        maxLength={field.maxLength}
+                        placeholder={field.placeholder}
+                        onChange={event => setInputStructureFact(selectedInput.id, field.key, event.target.value)}
+                      />
+                    </label>
+                  ))}
+                </div>
+                <button
+                  onClick={() => void saveInputFacts(selectedInput.id)}
+                  disabled={busy}
+                  className="btn btn-secondary mt-2 w-full !min-h-[30px] !text-[10px]"
+                >
+                  {selectedInput.data.image?.remote ? '保存商品属性与结构事实' : '上传素材时一并保存'}
+                </button>
               </Section>
             )}
 
@@ -684,7 +718,10 @@ export function WorkflowConsole() {
                 </button>
                 <button
                   onClick={() => void lockOutputsBatch(checkedOutputIds)}
-                  disabled={busy || !checkedOutputIds.some(id => outputs.find(node => node.id === id)?.data.status === 'satisfied')}
+                  disabled={busy || !checkedOutputIds.some(id => {
+                    const output = outputs.find(node => node.id === id)
+                    return output?.data.status === 'satisfied' && output.data.qcPassed === true
+                  })}
                   className="btn btn-secondary flex-1 !min-h-[27px] !px-2 !text-[10px]"
                 >
                   <Lock size={11}/>批量锁定
@@ -694,7 +731,7 @@ export function WorkflowConsole() {
                 </button>
               </div>
               <div className="mt-1 text-[10px]" style={{ color: 'var(--text-3)' }}>
-                已选 {checkedOutputIds.length} 张；批量满意只处理待审核图，批量锁定只处理已满意图。
+                已选 {checkedOutputIds.length} 张；批量满意只处理待审核图，批量锁定只处理已满意且质检通过的图片。
               </div>
             </Section>
 
@@ -777,9 +814,11 @@ export function WorkflowConsole() {
                                 )}
                                 {node.data.status === 'satisfied' && (
                                   <>
-                                    <button onClick={() => void lockOutput(node.id)} disabled={busy}
+                                    <button
+                                      onClick={() => void lockOutput(node.id)}
+                                      disabled={busy || node.data.qcPassed !== true}
                                       className="btn btn-secondary !min-h-[26px] !px-2 !text-[10px]">
-                                      <Lock size={11}/>锁定
+                                      <Lock size={11}/>{node.data.qcPassed === true ? '锁定' : '质检未通过'}
                                     </button>
                                     {node.data.tier === 'draft' && (
                                       <button onClick={() => void startHdRepair(node.id)} disabled={busy}

@@ -4,6 +4,7 @@ import clsx from 'clsx'
 import { useNodeStore } from '../../stores/node-store'
 import { useWorkbench } from '../../stores/workbench-store'
 import { ProjectLibraryDialog } from './ProjectLibraryDialog'
+import { ProviderSettingsDialog } from './ProviderSettingsDialog'
 
 interface MenuItem {
   label: string
@@ -21,6 +22,7 @@ export function AppMenuBar() {
   const resetCanvas = useNodeStore(state => state.resetCanvas)
   const setProjectLibraryOpen = useNodeStore(state => state.setProjectLibraryOpen)
   const setProjectSettingsOpen = useNodeStore(state => state.setProjectSettingsOpen)
+  const setProviderSettingsOpen = useNodeStore(state => state.setProviderSettingsOpen)
   const setTypePickerOpen = useNodeStore(state => state.setTypePickerOpen)
   const setModelPickerOpen = useNodeStore(state => state.setModelPickerOpen)
   const exportLocked = useNodeStore(state => state.exportLocked)
@@ -66,13 +68,16 @@ export function AppMenuBar() {
     },
     {
       id: 'options', label: '选项',
-      items: providers.length ? providers.map(provider => ({
-        label: provider.name + (provider.available === false ? '（未配置）' : ''),
-        icon: ChevronRight,
-        disabled: provider.available === false || provider.id === providerId,
-        action: () => setProviderId(provider.id),
-      })) : [
-        { label: 'Mock 生图引擎', icon: ChevronRight, disabled: providerId === 'mock', action: () => setProviderId('mock') },
+      items: [
+        { label: 'Provider 与 API Key 设置…', icon: Settings2, action: () => setProviderSettingsOpen(true) },
+        ...(providers.length ? providers.map(provider => ({
+          label: provider.name + (provider.available === false ? '（未配置）' : ''),
+          icon: ChevronRight,
+          disabled: provider.available === false || provider.id === providerId,
+          action: () => setProviderId(provider.id),
+        })) : [
+          { label: 'Mock 生图引擎', icon: ChevronRight, disabled: providerId === 'mock', action: () => setProviderId('mock') },
+        ]),
       ],
     },
     {
@@ -88,9 +93,18 @@ export function AppMenuBar() {
   ]
 
   return (
-    <div ref={rootRef} className="relative z-40 flex h-9 shrink-0 items-center gap-1 border-b px-3"
+    <div ref={rootRef} className="relative z-[90] flex h-9 shrink-0 items-center gap-1 border-b px-3"
       style={{ background: 'var(--surface)', borderColor: 'var(--divider)' }}>
-      {openMenu && <div className="fixed inset-0 z-0" onMouseDown={() => setOpenMenu(null)}/>}
+      {openMenu && (
+        <div
+          className="fixed inset-0 z-0 cursor-default"
+          onPointerDown={event => {
+            event.preventDefault()
+            event.stopPropagation()
+            setOpenMenu(null)
+          }}
+        />
+      )}
       {menus.map(menu => (
         <div key={menu.id} className="relative">
           <button
@@ -103,7 +117,7 @@ export function AppMenuBar() {
           </button>
 
           {openMenu === menu.id && (
-            <div className="absolute left-0 top-[32px] w-[260px] overflow-hidden rounded-xl border py-1.5"
+            <div className="absolute left-0 top-[32px] z-10 w-[260px] overflow-hidden rounded-xl border py-1.5"
               style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-lg)' }}>
               {menu.items.map(item => (
                 <button
@@ -127,6 +141,7 @@ export function AppMenuBar() {
       ))}
 
       <ProjectLibraryDialog/>
+      <ProviderSettingsDialog/>
     </div>
   )
 }

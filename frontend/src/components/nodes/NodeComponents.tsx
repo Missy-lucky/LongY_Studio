@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import { Handle, Position } from '@xyflow/react'
-import { Image as ImageIcon } from 'lucide-react'
+import { Download, FileText, Image as ImageIcon, Pencil, Plus, Trash2 } from 'lucide-react'
 import clsx from 'clsx'
-import type { FlowInputNode, FlowModelNode, FlowProcessingNode, FlowOutputNode } from '../../types/node-system'
+import type { FlowCareInputNode, FlowCareOutputNode, FlowInputNode, FlowModelNode, FlowPoseNode, FlowReferenceNode, FlowProcessingNode, FlowOutputNode } from '../../types/node-system'
 import { STATUS_COLORS } from '../../types/node-system'
 import { useNodeStore } from '../../stores/node-store'
 
@@ -47,7 +47,9 @@ export function InputNodeComponent({ data, id }: { data: FlowInputNode['data']; 
       }}>
       <Handle type="source" position={Position.Right} className={portStyle}/>
       <div className="flex items-center justify-between px-3 pb-1 pt-2.5">
-        <span className="truncate text-[13px] font-medium" style={{ color: 'var(--primary)' }}>{data.categoryName}</span>
+        <span className="truncate text-[13px] font-medium" style={{ color: 'var(--primary)' }}>
+          {data.categoryGroup} · {data.categoryName}
+        </span>
         {data.image?.remote && <span className="h-2 w-2 rounded-full bg-emerald-500" title="素材已入库"/>}
       </div>
       <div
@@ -110,6 +112,119 @@ export function ModelNodeComponent({ data }: { data: FlowModelNode['data'] }) {
           ? <img src={data.modelImage} alt={data.styleName} draggable={false}
               className="pointer-events-none h-full w-full object-contain" decoding="async"/>
           : <div className="flex h-full items-center justify-center text-lg">👗</div>}
+      </div>
+    </div>
+  )
+}
+
+const REFERENCE_LABEL = {
+  pose: '动作姿势参考',
+  style: '风格/构图参考',
+  detail: '商品细节证据',
+} as const
+
+function ProjectReferenceCard({
+  id,
+  data,
+  child,
+}: {
+  id: string
+  data: FlowPoseNode['data'] | FlowReferenceNode['data']
+  child: boolean
+}) {
+  const openImageViewer = useNodeStore(s => s.openImageViewer)
+  const removeProjectReference = useNodeStore(s => s.removeProjectReference)
+  return (
+    <div className="card workflow-node relative w-[220px] overflow-hidden !rounded-2xl"
+      style={{ borderColor: data.role === 'pose' ? 'rgba(236,72,153,.38)' : 'rgba(20,184,166,.38)' }}>
+      {child
+        ? <Handle type="target" position={Position.Left} className={portStyle}/>
+        : <Handle type="source" position={Position.Right} className={portStyle}/>}
+      <div className="flex items-center gap-2 px-3 pb-2 pt-3">
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] font-medium" style={{ color: data.role === 'pose' ? '#EC4899' : '#14B8A6' }}>
+            {REFERENCE_LABEL[data.role]}
+          </div>
+          <div className="truncate text-[12px] font-semibold" style={{ color: 'var(--text)' }}>{data.name}</div>
+        </div>
+        <button className="btn btn-ghost !p-1.5" title="删除参考节点"
+          onClick={event => { event.stopPropagation(); void removeProjectReference(id) }}>
+          <Trash2 size={12}/>
+        </button>
+      </div>
+      <div className="mx-3 mb-3 aspect-[4/3] cursor-zoom-in overflow-hidden rounded-xl"
+        style={{ background: 'var(--bg-2)' }}
+        onDoubleClick={event => {
+          event.stopPropagation()
+          openImageViewer({ src: data.image, title: data.name, subtitle: REFERENCE_LABEL[data.role] })
+        }}>
+        <img src={data.image} alt={data.name} draggable={false} className="pointer-events-none h-full w-full object-contain"/>
+      </div>
+    </div>
+  )
+}
+
+export function PoseNodeComponent({ id, data }: { id: string; data: FlowPoseNode['data'] }) {
+  return <ProjectReferenceCard id={id} data={data} child/>
+}
+
+export function ReferenceNodeComponent({ id, data }: { id: string; data: FlowReferenceNode['data'] }) {
+  return <ProjectReferenceCard id={id} data={data} child={false}/>
+}
+
+export function CareInputNodeComponent({ data }: { data: FlowCareInputNode['data'] }) {
+  const openCareEditor = useNodeStore(s => s.openCareEditor)
+  return (
+    <div className="card workflow-node relative w-[240px] !rounded-2xl"
+      style={{ borderColor: 'rgba(217,119,6,.38)' }}>
+      <Handle type="source" position={Position.Right} className={portStyle}/>
+      <div className="flex items-start gap-3 px-4 py-3.5">
+        <div className="rounded-lg p-2" style={{ color: '#D97706', background: 'rgba(217,119,6,.10)' }}>
+          <FileText size={18}/>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] font-semibold" style={{ color: 'var(--text)' }}>洗护 / 面料信息</div>
+          <div className="mt-1 truncate text-[10px]" style={{ color: 'var(--text-3)' }}>
+            {data.cardCount ? `已生成 ${data.cardCount} 张 · ${data.latestProductName}` : '结构化录入，不由模型猜测'}
+          </div>
+        </div>
+      </div>
+      <button className="btn btn-secondary mx-4 mb-3 w-[calc(100%-2rem)] !min-h-[30px] !text-[11px]"
+        onClick={event => { event.stopPropagation(); openCareEditor() }}>
+        <Plus size={12}/>新建白底说明图
+      </button>
+    </div>
+  )
+}
+
+export function CareOutputNodeComponent({ data }: { data: FlowCareOutputNode['data'] }) {
+  const openImageViewer = useNodeStore(s => s.openImageViewer)
+  const openCareEditor = useNodeStore(s => s.openCareEditor)
+  return (
+    <div className="card workflow-node relative w-[220px] overflow-hidden !rounded-2xl"
+      style={{ borderColor: 'rgba(217,119,6,.38)' }}>
+      <Handle type="target" position={Position.Left} className={portStyle}/>
+      <div className="aspect-[3/4] cursor-zoom-in" style={{ background: 'var(--bg-2)' }}
+        onDoubleClick={event => {
+          event.stopPropagation()
+          openImageViewer({ src: data.thumbnail, title: data.productName, subtitle: data.compositionSummary })
+        }}>
+        <img src={data.thumbnail} alt={data.productName} draggable={false}
+          className="pointer-events-none h-full w-full object-contain"/>
+      </div>
+      <div className="flex items-center gap-2 px-3 py-2.5">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[12px] font-medium" style={{ color: 'var(--text)' }}>{data.productName}</div>
+          <div className="mt-0.5 truncate text-[9px]" style={{ color: 'var(--text-3)' }}>{data.compositionSummary}</div>
+        </div>
+        <a className="btn btn-ghost !p-1.5" href={data.thumbnail} download={`${data.productName || '洗护说明'}.png`}
+          title="下载白底 PNG" onClick={event => event.stopPropagation()}>
+          <Download size={12}/>
+        </a>
+        <button className="btn btn-ghost !p-1.5" title="编辑并重新渲染"
+          onClick={event => { event.stopPropagation(); openCareEditor(data.cardId) }}>
+          <Pencil size={12}/>
+        </button>
       </div>
     </div>
   )

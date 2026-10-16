@@ -167,6 +167,73 @@ def asset_file(project_id: str, asset_id: str) -> FileResponse:
     return FileResponse(absolute)
 
 
+@router.post("/{asset_id}/replace")
+async def replace_asset(project_id: str, asset_id: str, file: UploadFile = File(...)) -> dict:
+    """Replace an existing source image in place so its item binding remains stable."""
+    filename = file.filename or "replacement.png"
+    suffix = Path(filename).suffix.lower()
+    if suffix not in ALLOWED:
+        raise HTTPException(400, "格式不支持")
+    data = await file.read()
+    if not valid_image_bytes(data, suffix):
+        raise HTTPException(400, "文件内容不是有效图片")
+    digest = hashlib.sha256(data).hexdigest()
+    db = get_db()
+    target: Path | None = None
+    try:
+        row = db.execute(
+            "SELECT * FROM assets WHERE id=? AND project_id=?",
+            (asset_id, project_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "素材不存在")
+        if row["hash"] == digest:
+            return {"asset": camelize(dict(row)), "unchanged": True}
+        if db.execute(
+            "SELECT 1 FROM assets WHERE project_id=? AND hash=? AND id<>?",
+            (project_id, digest, asset_id),
+        ).fetchone():
+            raise HTTPException(409, "该图片已存在于当前项目")
+
+        asset_dir = settings.data_dir / "projects" / project_id / "assets"
+        asset_dir.mkdir(parents=True, exist_ok=True)
+        target = asset_dir / f"{uuid.uuid4().hex[:12]}{suffix}"
+        target.write_bytes(data)
+        try:
+            width, height = image_dimensions(target)
+        except Exception as exc:
+            target.unlink(missing_ok=True)
+            raise HTTPException(400, "图片解码失败") from exc
+        relative = target.relative_to(settings.data_dir).as_posix()
+        old_path = (settings.data_dir / row["file_path"]).resolve()
+        db.execute(
+            """UPDATE assets SET file_path=?,hash=?,size=?,width=?,height=?
+               WHERE id=? AND project_id=?""",
+            (relative, digest, len(data), width, height, asset_id, project_id),
+        )
+        db.execute(
+            "INSERT INTO events(time,project_id,task_id,type,message) VALUES(?,?,?,?,?)",
+            (now(), project_id, asset_id, "asset.replace", f"已替换商品素材：{filename}"),
+        )
+        db.commit()
+        data_root = settings.data_dir.resolve()
+        if old_path.is_relative_to(data_root) and old_path != target:
+            old_path.unlink(missing_ok=True)
+        updated = db.execute("SELECT * FROM assets WHERE id=?", (asset_id,)).fetchone()
+        return {"asset": camelize(dict(updated)), "unchanged": False}
+    except Exception:
+        if target and target.is_file():
+            current = db.execute(
+                "SELECT file_path FROM assets WHERE id=? AND project_id=?",
+                (asset_id, project_id),
+            ).fetchone()
+            if not current or current["file_path"] != target.relative_to(settings.data_dir).as_posix():
+                target.unlink(missing_ok=True)
+        raise
+    finally:
+        db.close()
+
+
 @router.get("/{asset_id}/quality")
 def asset_quality(project_id: str, asset_id: str) -> dict:
     _, absolute = _asset_path(project_id, asset_id)

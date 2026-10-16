@@ -1,0 +1,42 @@
+{
+  "schema": "longy.prompt-calibration.v1",
+  "id": "example-calibration-v1",
+  "version": 1,
+  "sourceRegistry": "asset-library/qc-rules/reference-workbook.json",
+  "method": "Human-audited prompt calibration from approved references, rejected outputs and marked defect evidence; this is not model fine-tuning.",
+  "evidenceSummary": {
+    "approvedReference": 179,
+    "rejectedOutput": 48,
+    "defectEvidence": 43,
+    "sourceContext": 65,
+    "unfinishedSource": 125
+  },
+  "safeguards": {
+    "flat": [
+      "Use the uploaded garment as the sole authority for construction; never infer an unseen back, inner layer, closure, pocket, label or accessory.",
+      "Keep collar, neckline, sleeve length, cuffs, waistband, hem, seams and every visible fastener in the same count, position and topology as the source.",
+      "Preserve thin, sheer, glossy, knitted or padded material character; do not make translucent fabric opaque or change apparent thickness.",
+      "For multi-piece products, keep every uploaded piece separate, complete and uncropped; never merge pieces or substitute a reference garment."
+    ],
+    "detail": [
+      "Magnify only a detail that is visible in authoritative product evidence; do not hallucinate hidden construction.",
+      "Preserve the exact count, position, orientation and material of buttons, zippers, belt loops, waist hardware, pockets, labels and decorative elements.",
+      "The close-up must remain consistent with the full garment color, weave, stitching direction and surrounding structure."
+    ],
+    "partial": [
+      "Generate a native close-up at the requested framing and resolution; never crop or enlarge a full-body output.",
+      "Keep the sellable garment fully readable and unobstructed while preserving model identity, natural anatomy and believable garment-body contact.",
+      "Do not let fallback base layers introduce outerwear, logos, patterns or accessories that cover or compete with the product."
+    ],
+    "model": [
+      "Preserve the complete uploaded outfit manifest and the locked model identity; style references may guide lighting and composition only.",
+      "Keep garment length, silhouette, closure, pocket, waistline, hem and layering relationships consistent across the whole body.",
+      "Use natural pose, hands, body proportions and garment drape without wide-angle stretching, limb deformation or mannequin stiffness."
+    ]
+  },
+  "negativeAdditions": [
+    "Do not invent unseen reverse-side details or copy clothing from style references.",
+    "Do not change fastener count, pocket placement, collar shape, sleeve length, waistband, hem, transparency, thickness or color.",
+    "Do not crop a full-body image to simulate a product close-up."
+  ]
+}

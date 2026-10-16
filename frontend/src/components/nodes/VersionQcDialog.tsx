@@ -198,6 +198,23 @@ export function VersionQcDialog() {
               )}
 
               <CheckCard title="服装一致性" check={report.garment}/>
+              {report.structure?.required && (
+                <section className="rounded-xl border border-warning/40 bg-warning/5 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs font-semibold" style={{ color: 'var(--text)' }}>商品结构事实</span>
+                    <span className="text-[10px] text-warning">需人工对照原图确认</span>
+                  </div>
+                  <div className="mt-2 space-y-1.5">
+                    {report.structure.facts.map(fact => (
+                      <div key={fact.key} className="grid grid-cols-[88px_1fr] gap-2 text-[10px]">
+                        <span className="text-text-muted">{fact.label}</span>
+                        <span style={{ color: 'var(--text-2)' }}>{fact.expected}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2 text-[10px] leading-4 text-text-muted">{report.structure.note}</div>
+                </section>
+              )}
               <CheckCard title="模特身份与比例" check={report.model}/>
 
               <section className="rounded-xl border p-3" style={{ borderColor: 'var(--border)', background: 'var(--bg-2)' }}>

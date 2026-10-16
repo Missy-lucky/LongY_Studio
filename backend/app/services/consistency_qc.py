@@ -20,8 +20,9 @@ from PIL import Image
 
 from ..config import PROJECT_ROOT
 from .image_qc import inspect_image
+from .garment_structure import structure_review
 
-QC_SCHEMA = "longy.consistency-qc.v1"
+QC_SCHEMA = "longy.consistency-qc.v2"
 FACE_MODEL_PATH = PROJECT_ROOT / "asset-library" / "qc-models" / "face_landmarker.task"
 POSE_MODEL_PATH = PROJECT_ROOT / "asset-library" / "qc-models" / "pose_landmarker_heavy.task"
 _FACE_LOCK = threading.Lock()
@@ -136,15 +137,115 @@ def _structure_similarity(left: np.ndarray, right: np.ndarray) -> tuple[float, i
     return round(score, 4), inliers
 
 
+def _foreground_mask(image: np.ndarray) -> tuple[np.ndarray, float]:
+    """Estimate a catalogue garment foreground without claiming semantic segmentation."""
+    height, width = image.shape[:2]
+    patch = max(4, min(height, width) // 20)
+    corners = np.concatenate([
+        image[:patch, :patch].reshape(-1, 3), image[:patch, -patch:].reshape(-1, 3),
+        image[-patch:, :patch].reshape(-1, 3), image[-patch:, -patch:].reshape(-1, 3),
+    ])
+    background = np.median(corners, axis=0).astype(np.uint8).reshape(1, 1, 3)
+    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB).astype(np.float32)
+    background_lab = cv2.cvtColor(background, cv2.COLOR_BGR2LAB).astype(np.float32)[0, 0]
+    distance = np.linalg.norm(lab - background_lab, axis=2)
+    mask = (distance > 18).astype(np.uint8) * 255
+    kernel = np.ones((5, 5), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return mask, 0.0
+    largest = max(contours, key=cv2.contourArea)
+    isolated = np.zeros_like(mask)
+    cv2.drawContours(isolated, [largest], -1, 255, thickness=cv2.FILLED)
+    coverage = float(np.count_nonzero(isolated)) / max(1, isolated.size)
+    confidence = max(0.0, min(1.0, 1 - abs(coverage - 0.45) / 0.45))
+    return isolated, round(confidence, 4)
+
+
+def _lab_color_similarity(left: np.ndarray, right: np.ndarray) -> tuple[float, float]:
+    left_mask, left_confidence = _foreground_mask(left)
+    right_mask, right_confidence = _foreground_mask(right)
+    left_lab = cv2.cvtColor(left, cv2.COLOR_BGR2LAB)
+    right_lab = cv2.cvtColor(right, cv2.COLOR_BGR2LAB)
+    left_pixels = left_lab[left_mask > 0]
+    right_pixels = right_lab[right_mask > 0]
+    if not len(left_pixels) or not len(right_pixels):
+        return 0.0, 0.0
+    delta = float(np.linalg.norm(np.median(left_pixels, axis=0) - np.median(right_pixels, axis=0)))
+    score = max(0.0, min(1.0, 1 - delta / 80.0))
+    return round(score, 4), round(min(left_confidence, right_confidence), 4)
+
+
+def _silhouette_similarity(left: np.ndarray, right: np.ndarray) -> tuple[float, float]:
+    left_mask, left_confidence = _foreground_mask(left)
+    right_mask, right_confidence = _foreground_mask(right)
+
+    def crop(mask: np.ndarray) -> tuple[np.ndarray, float]:
+        points = cv2.findNonZero(mask)
+        if points is None:
+            return np.zeros((128, 128), dtype=np.uint8), 0.0
+        x, y, width, height = cv2.boundingRect(points)
+        aspect = width / max(1, height)
+        fitted = cv2.resize(mask[y:y + height, x:x + width], (128, 128), interpolation=cv2.INTER_NEAREST)
+        return fitted, aspect
+
+    left_crop, left_aspect = crop(left_mask)
+    right_crop, right_aspect = crop(right_mask)
+    intersection = np.count_nonzero((left_crop > 0) & (right_crop > 0))
+    union = np.count_nonzero((left_crop > 0) | (right_crop > 0))
+    iou = intersection / max(1, union)
+    aspect_score = min(left_aspect, right_aspect) / max(left_aspect, right_aspect, 1e-6)
+    score = iou * 0.75 + aspect_score * 0.25
+    return round(float(score), 4), round(min(left_confidence, right_confidence), 4)
+
+
+def _authenticity_checks(
+    garment: dict[str, Any], structure_facts: dict[str, str] | None,
+) -> dict[str, Any]:
+    facts = {str(key).lower(): str(value).strip() for key, value in (structure_facts or {}).items() if str(value).strip()}
+    logo_required = any(token in key for key in facts for token in ("logo", "brand", "trademark", "商标"))
+    fastener_required = any(
+        token in key or token in value.lower()
+        for key, value in facts.items()
+        for token in ("closure", "fastener", "zip", "button", "扣", "拉链", "纽扣")
+    )
+    return {
+        "color": {
+            "status": "pass" if garment["labColorSimilarity"] >= 0.55 else "review",
+            "automated": True, "score": garment["labColorSimilarity"],
+            "segmentationConfidence": garment["foregroundConfidence"],
+        },
+        "silhouette": {
+            "status": "pass" if garment["silhouetteSimilarity"] >= 0.42 else "review",
+            "automated": True, "score": garment["silhouetteSimilarity"],
+            "segmentationConfidence": garment["foregroundConfidence"],
+        },
+        "logo": {
+            "status": "human_review_required" if logo_required else "not_declared",
+            "automated": False, "required": logo_required,
+            "evidence": "ORB keypoints are supporting evidence only; logo text/shape requires human confirmation.",
+        },
+        "fasteners": {
+            "status": "human_review_required" if fastener_required else "not_declared",
+            "automated": False, "required": fastener_required,
+            "evidence": "Structure similarity cannot reliably count or classify buttons, buckles, or zippers.",
+        },
+    }
+
+
 def garment_consistency(reference: Path, output: Path) -> dict[str, Any]:
     ref = _load_image(reference)
     generated = _load_image(output)
     color = _histogram_similarity(ref, generated)
     perceptual = _perceptual_hash_similarity(ref, generated)
     structure, inliers = _structure_similarity(ref, generated)
+    lab_color, color_confidence = _lab_color_similarity(ref, generated)
+    silhouette, silhouette_confidence = _silhouette_similarity(ref, generated)
     # Color is the most stable signal after garment-to-flat transformation. ORB is
     # intentionally weighted lower because layout transformation reduces keypoint matches.
-    score = color * 0.48 + perceptual * 0.24 + structure * 0.28
+    score = color * 0.30 + lab_color * 0.20 + silhouette * 0.20 + perceptual * 0.12 + structure * 0.18
     return {
         "score": round(min(1.0, max(0.0, score)), 4),
         "passed": bool(score >= GARMENT_THRESHOLD),
@@ -153,6 +254,9 @@ def garment_consistency(reference: Path, output: Path) -> dict[str, Any]:
         "perceptualSimilarity": perceptual,
         "structureSimilarity": structure,
         "structureInliers": inliers,
+        "labColorSimilarity": lab_color,
+        "silhouetteSimilarity": silhouette,
+        "foregroundConfidence": round(min(color_confidence, silhouette_confidence), 4),
     }
 
 
@@ -359,6 +463,7 @@ def run_consistency_qc(
     *,
     enforce: bool = True,
     deep_model_qc: bool = True,
+    structure_facts: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     report: dict[str, Any] = {
         "schema": QC_SCHEMA,
@@ -366,6 +471,7 @@ def run_consistency_qc(
         "output": str(output),
         "enforced": enforce,
         "reasons": [],
+        "structure": structure_review(structure_facts),
     }
     try:
         report["pixel"] = inspect_image(output, expected_size=None)
@@ -387,12 +493,21 @@ def run_consistency_qc(
             "reasons": [],
             "lightweight": True,
         }
+        report["authenticity"] = {
+            key: {"status": "skipped_for_mock", "automated": key in {"color", "silhouette"}}
+            for key in ("color", "logo", "silhouette", "fasteners")
+        }
     elif garment_reference and garment_reference.is_file():
         report["garment"] = garment_consistency(garment_reference, output)
+        report["authenticity"] = _authenticity_checks(report["garment"], structure_facts)
         if not report["garment"]["passed"]:
             report["reasons"].append("garment_consistency_failed")
     else:
         report["garment"] = {"score": None, "passed": False, "reasons": ["reference_missing"]}
+        report["authenticity"] = {
+            key: {"status": "reference_missing", "automated": key in {"color", "silhouette"}}
+            for key in ("color", "logo", "silhouette", "fasteners")
+        }
 
     if task_type == "model":
         if not deep_model_qc:

@@ -1,0 +1,74 @@
+{
+  "schema": "longy.garment-structure-fields.v1",
+  "version": "1.0.0",
+  "fields": [
+    {
+      "key": "silhouette",
+      "label": "版型轮廓",
+      "placeholder": "如：宽松直筒、短款修身、A 字",
+      "maxLength": 120
+    },
+    {
+      "key": "neckline",
+      "label": "领型 / 领口",
+      "placeholder": "如：圆领、翻领、V 领，领宽约 3 cm",
+      "maxLength": 120,
+      "parentIds": ["upper"],
+      "categoryIds": ["dress"]
+    },
+    {
+      "key": "sleeve",
+      "label": "袖长 / 袖型",
+      "placeholder": "如：长袖落肩、七分喇叭袖",
+      "maxLength": 120,
+      "parentIds": ["upper"],
+      "categoryIds": ["dress"]
+    },
+    {
+      "key": "closure",
+      "label": "门襟 / 扣件",
+      "placeholder": "如：单排五粒贝壳扣、左侧隐形拉链",
+      "maxLength": 120
+    },
+    {
+      "key": "pockets",
+      "label": "口袋",
+      "placeholder": "如：胸前一个贴袋、后片两个袋盖口袋",
+      "maxLength": 120,
+      "parentIds": ["upper", "lower", "bag"]
+    },
+    {
+      "key": "waist",
+      "label": "腰头 / 腰部",
+      "placeholder": "如：后腰松紧、前腰平整，六个裤袢",
+      "maxLength": 120,
+      "parentIds": ["lower"],
+      "categoryIds": ["belt"]
+    },
+    {
+      "key": "hem",
+      "label": "下摆 / 裤脚 / 裙摆",
+      "placeholder": "如：弧形下摆、直筒裤脚、双层裙摆",
+      "maxLength": 120,
+      "parentIds": ["upper", "lower"]
+    },
+    {
+      "key": "pattern",
+      "label": "图案",
+      "placeholder": "如：左胸小号刺绣，背面无图案",
+      "maxLength": 120
+    },
+    {
+      "key": "logoPosition",
+      "label": "标识位置",
+      "placeholder": "如：右后腰皮牌、鞋舌中央标识",
+      "maxLength": 120
+    },
+    {
+      "key": "distinctiveDetails",
+      "label": "其他不可改变细节",
+      "placeholder": "如：袖口两道撞色线、左侧金属环",
+      "maxLength": 240
+    }
+  ]
+}

@@ -57,7 +57,8 @@ def backend_dependencies_ok() -> bool:
         [
             str(BACKEND_PYTHON),
             "-c",
-            "import fastapi, uvicorn, numpy, PIL, pillow_heif",
+            "import cv2, fastapi, mediapipe, numpy, PIL, pillow_heif, uvicorn; "
+            "from mediapipe.tasks.python import vision",
         ],
         cwd=BACKEND_DIR,
         stdout=subprocess.DEVNULL,
@@ -67,17 +68,21 @@ def backend_dependencies_ok() -> bool:
 
 
 def ensure_backend_env() -> None:
+    created = False
     if not BACKEND_PYTHON.exists():
         print("首次运行：创建 Python 虚拟环境...")
         subprocess.run([sys.executable, "-m", "venv", str(BACKEND_DIR / ".venv")], check=True)
+        created = True
     if not backend_dependencies_ok():
         print("同步后端依赖...")
+        reinstall_args = [] if created else ["--upgrade", "--force-reinstall"]
         subprocess.run(
             [
                 str(BACKEND_PYTHON),
                 "-m",
                 "pip",
                 "install",
+                *reinstall_args,
                 "-r",
                 str(BACKEND_DIR / "requirements.txt"),
             ],
